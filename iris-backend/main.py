@@ -32,6 +32,9 @@ state = {
 class ExperimentRequest(BaseModel):
     experiment_type: str
 
+class AskQuestionRequest(BaseModel):
+    question: str
+
 @app.get("/")
 def root():
     return {"message": "Iris backend is running"}
@@ -94,6 +97,53 @@ def advance_step():
         return {
             "success": False,
             "message": "Already on last step"
+        }
+
+@app.post("/ask-question")
+async def ask_question(request: AskQuestionRequest):
+    if not state["steps"]:
+        return {"error": "No experiment started"}
+        
+    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    
+    prompt = f"You are a lab assistant helping a student with a {state['experiment_type']} experiment. They are currently on this step: {state['steps'][state['current_step']]}. The student asks: {request.question}. Answer in 2-3 sentences maximum. Be clear, helpful and simple \u2014 your response will be read aloud to the student."
+    
+    message = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=256,
+        messages=[
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ]
+    )
+    
+    answer_text = message.content[0].text
+    
+    tts_url = "https://api.elevenlabs.io/v1/text-to-speech/gJx1vCzNCD1EQHT212Ls"
+    headers = {
+        "Accept": "audio/mpeg",
+        "Content-Type": "application/json",
+        "xi-api-key": ELEVENLABS_API_KEY
+    }
+    data = {
+        "text": answer_text,
+        "model_id": "eleven_flash_v2_5"
+    }
+    
+    async with httpx.AsyncClient() as httpx_client:
+        response = await httpx_client.post(tts_url, json=data, headers=headers)
+        
+    if response.status_code == 200:
+        audio_b64 = base64.b64encode(response.content).decode('utf-8')
+        return {
+            "answer_text": answer_text,
+            "audio_base64": audio_b64
+        }
+    else:
+        return {
+            "error": f"ElevenLabs API Error: {response.text}"
         }
 
 async def fetch_frame(session: aiohttp.ClientSession):
