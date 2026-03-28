@@ -146,6 +146,66 @@ async def ask_question(request: AskQuestionRequest):
             "error": f"ElevenLabs API Error: {response.text}"
         }
 
+@app.post("/end-experiment")
+async def end_experiment():
+    if not state["experiment_type"]:
+        return {"error": "No experiment started"}
+
+    experiment_type = state["experiment_type"]
+    steps = state["steps"]
+    total_steps = len(steps)
+    current_step = state["current_step"]
+
+    prompt = f"You are a lab assistant. A student just completed a {experiment_type} experiment. \nThey completed {current_step + 1} out of {total_steps} steps.\nHere were the steps: {steps}\n\nWrite a short 3-4 sentence summary of what the student accomplished today. \nMention what scientific concept they practiced, what they should have observed, \nand one encouraging sentence. Keep it simple — it will be read aloud to the student."
+
+    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    
+    message = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=300,
+        messages=[
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ]
+    )
+    
+    summary_text = message.content[0].text
+    
+    tts_url = "https://api.elevenlabs.io/v1/text-to-speech/gJx1vCzNCD1EQHT212Ls"
+    headers = {
+        "Accept": "audio/mpeg",
+        "Content-Type": "application/json",
+        "xi-api-key": ELEVENLABS_API_KEY
+    }
+    data = {
+        "text": summary_text,
+        "model_id": "eleven_flash_v2_5"
+    }
+    
+    async with httpx.AsyncClient() as httpx_client:
+        response = await httpx_client.post(tts_url, json=data, headers=headers)
+        
+    if response.status_code == 200:
+        audio_b64 = base64.b64encode(response.content).decode('utf-8')
+        
+        # Reset state back to empty
+        state["current_step"] = 0
+        state["steps"] = []
+        state["experiment_type"] = ""
+        
+        return {
+            "summary_text": summary_text,
+            "audio_base64": audio_b64,
+            "steps_completed": current_step + 1,
+            "total_steps": total_steps
+        }
+    else:
+        return {
+            "error": f"ElevenLabs API Error: {response.text}"
+        }
+
 async def fetch_frame(session: aiohttp.ClientSession):
     try:
         async with session.get(ESP32_CAPTURE_URL, timeout=aiohttp.ClientTimeout(total=5)) as resp:
