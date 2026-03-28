@@ -211,6 +211,24 @@ async def experiment_stream(websocket: WebSocket):
                     if text_to_say and text_to_say != last_spoken_guidance:
                         last_spoken_guidance = text_to_say
                         
+                        anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+                        current_experiment = state.get("experiment_type", "unknown")
+                        current_step_text = state["steps"][state["current_step"]] if state.get("steps") else "Waiting for experiment to start"
+                        
+                        enrich_prompt = f"You are a lab assistant speaking to a student doing a {current_experiment} experiment on step: {current_step_text}.\n\nThe vision system just said: \"{text_to_say}\"\n\nIn ONE sentence only, add a brief helpful scientific explanation of why this step matters or what the student should be seeing. Keep it simple and natural — it will be read aloud. If the vision system flagged an error, just return the error message unchanged without adding explanation."
+                        
+                        message = anthropic_client.messages.create(
+                            model="claude-sonnet-4-6",
+                            max_tokens=100,
+                            messages=[
+                                {
+                                    "role": "user",
+                                    "content": enrich_prompt
+                                }
+                            ]
+                        )
+                        enriched_text = message.content[0].text
+                        
                         tts_url = "https://api.elevenlabs.io/v1/text-to-speech/gJx1vCzNCD1EQHT212Ls"
                         headers = {
                             "Accept": "audio/mpeg",
@@ -218,7 +236,7 @@ async def experiment_stream(websocket: WebSocket):
                             "xi-api-key": ELEVENLABS_API_KEY
                         }
                         data = {
-                            "text": text_to_say,
+                            "text": enriched_text,
                             "model_id": "eleven_flash_v2_5"
                         }
                         
@@ -230,7 +248,7 @@ async def experiment_stream(websocket: WebSocket):
                             
                             await websocket.send_json({
                                 "audio_base64": audio_b64,
-                                "text": text_to_say
+                                "text": enriched_text
                             })
                         else:
                             print(f"ElevenLabs API Error: {response.text}")
