@@ -353,7 +353,6 @@ struct ExperimentSetupScreen: View {
     let onBack: () -> Void
     let onStart: () -> Void
 
-    @State private var cameraMode = "Phone"
     @State private var phoneSide = "Rear"
 
     var body: some View {
@@ -383,14 +382,14 @@ struct ExperimentSetupScreen: View {
 
                     ConnectionStatusRow(statuses: [
                         .init(label: "Camera", value: cameraStatusValue, color: IrisPalette.viridian),
-                        .init(label: "Mode", value: cameraMode, color: IrisPalette.flame),
-                        .init(label: "Lens", value: cameraMode == "Phone" ? phoneSide : "Remote", color: IrisPalette.coolAqua)
+                        .init(label: "Mode", value: session.selectedCameraMode.rawValue, color: IrisPalette.flame),
+                        .init(label: "Lens", value: session.selectedCameraMode == .phone ? phoneSide : "Remote", color: IrisPalette.coolAqua)
                     ])
                     .padding(.horizontal, 18)
                     .padding(.bottom, 14)
 
                     Group {
-                        if cameraMode == "Phone" {
+                        if session.selectedCameraMode == .phone {
                             ZStack {
                                 CameraPreviewView(session: session.cameraManager.session)
 
@@ -420,20 +419,18 @@ struct ExperimentSetupScreen: View {
                     .padding(.bottom, 18)
 
                     HStack(spacing: 14) {
-                        setupCameraCard(title: "Phone", subtitle: "Device camera", icon: "iphone", selected: cameraMode == "Phone") {
-                            cameraMode = "Phone"
+                        setupCameraCard(title: "Phone", subtitle: "Device camera", icon: "iphone", selected: session.selectedCameraMode == .phone) {
                             session.prepareCamera(position: phoneSide == "Front" ? .front : .back)
                         }
 
-                        setupCameraCard(title: "Glasses", subtitle: "External stream", icon: "eyeglasses", selected: cameraMode == "Glasses") {
-                            cameraMode = "Glasses"
+                        setupCameraCard(title: "Glasses", subtitle: "External stream", icon: "eyeglasses", selected: session.selectedCameraMode == .glasses) {
                             session.useExternalCameraSource()
                         }
                     }
                     .padding(.horizontal, 18)
                     .padding(.bottom, 22)
 
-                    if cameraMode == "Phone" {
+                    if session.selectedCameraMode == .phone {
                         HStack(spacing: 8) {
                             ForEach(["Front", "Rear"], id: \.self) { side in
                                 Button {
@@ -526,14 +523,14 @@ struct ExperimentSetupScreen: View {
             .padding(.bottom, 96)
         }
         .task {
-            guard cameraMode == "Phone" else { return }
+            guard session.selectedCameraMode == .phone else { return }
             session.prepareCamera(position: phoneSide == "Front" ? .front : .back)
         }
     }
 
     private var cameraStatusValue: String {
-        if cameraMode == "Glasses" {
-            return "External"
+        if session.selectedCameraMode == .glasses {
+            return session.networkManager.isStreamConnected ? "Streaming" : "Ready"
         }
         switch session.cameraManager.authorizationStatus {
         case .authorized:
