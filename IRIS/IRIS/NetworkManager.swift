@@ -22,14 +22,25 @@ import Foundation
 @MainActor
 final class NetworkManager: NSObject, ObservableObject {
     private static let serverAddressKey = "iris.network.serverAddress"
+    private static let geminiAPIKeyKey = "iris.network.geminiAPIKey"
+    private static let bundledGeminiAPIKey = (Bundle.main.object(forInfoDictionaryKey: "GEMINI_API_KEY") as? String)?
+        .trimmingCharacters(in: .whitespacesAndNewlines)
 
     // MARK: - Published state (observe these in SwiftUI)
     @Published var steps: [String] = []
     @Published var currentGuidanceText: String = ""
     @Published var errorMessage: String?
+    @Published var searchErrorMessage: String?
+    @Published var phoneVisionErrorMessage: String?
     @Published var isLoading: Bool = false
+    @Published var isSearching = false
+    @Published var isAnalyzingPhoneFrame = false
     @Published var isStreamConnected: Bool = false
     @Published var serverAddress: String = UserDefaults.standard.string(forKey: serverAddressKey) ?? "172.20.10.19:8000"
+    @Published var geminiAPIKey: String = {
+        let savedValue = UserDefaults.standard.string(forKey: geminiAPIKeyKey)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return savedValue.isEmpty ? (bundledGeminiAPIKey ?? "") : savedValue
+    }()
 
     // MARK: - Private
     private var audioPlayer: AVAudioPlayer?
@@ -60,11 +71,219 @@ final class NetworkManager: NSObject, ObservableObject {
         UserDefaults.standard.set(trimmedValue, forKey: Self.serverAddressKey)
     }
 
+    func updateGeminiAPIKey(_ value: String) {
+        let trimmedValue = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        geminiAPIKey = trimmedValue
+        UserDefaults.standard.set(trimmedValue, forKey: Self.geminiAPIKeyKey)
+    }
+
     func resetSessionState() {
         steps = []
         currentGuidanceText = ""
         errorMessage = nil
         isStreamConnected = false
+    }
+
+    func searchExperiments(query: String, language: AppLanguage = .english) async -> [Experiment] {
+        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedQuery.isEmpty else {
+            searchErrorMessage = nil
+            return []
+        }
+
+        guard !geminiAPIKey.isEmpty else {
+            searchErrorMessage = nil
+            return []
+        }
+
+        isSearching = true
+        searchErrorMessage = nil
+        defer { isSearching = false }
+
+        let subjectList = Subject.allCases.map(\.rawValue).joined(separator: ", ")
+        let difficultyList = Difficulty.allCases.map(\.rawValue).joined(separator: ", ")
+
+        let prompt = """
+        Find up to 4 real science lab experiments that best match this search query: "\(trimmedQuery)".
+
+        Return only experiments that a student could realistically perform in a lab or classroom.
+        Write the experiment names, descriptions, steps, and materials in \(language.promptName).
+        Normalize each result into valid JSON with these exact fields:
+        - name: string
+        - subject: one of [\(subjectList)]
+        - difficulty: one of [\(difficultyList)]
+        - time: short string like "20 min"
+        - description: one sentence
+        - steps: array of 3 to 5 short steps
+        - materials: array of 3 to 6 short material names
+
+        Return JSON only in this shape:
+        { "experiments": [ ... ] }
+        """
+
+        let payload = GeminiSearchRequest(
+            contents: [
+                .init(parts: [.init(text: prompt)])
+            ],
+            tools: [.init(googleSearch: GeminiGoogleSearchTool())],
+            generationConfig: .init(
+                responseMimeType: "application/json",
+                temperature: 0.2
+            )
+        )
+
+        do {
+            guard let text = try await performGeminiRequest(payload) else {
+                searchErrorMessage = "Gemini returned an unreadable search response."
+                return []
+            }
+
+            let jsonData = Data(text.utf8)
+            let searchResults = try JSONDecoder().decode(GeminiSearchResultEnvelope.self, from: jsonData)
+            return searchResults.experiments.map { result in
+                Experiment(
+                    name: result.name,
+                    subject: result.subjectValue,
+                    difficulty: result.difficultyValue,
+                    time: result.time,
+                    description: result.description,
+                    steps: result.steps,
+                    materials: result.materials,
+                    isUploaded: false
+                )
+            }
+        } catch {
+            searchErrorMessage = "Gemini search error: \(error.localizedDescription)"
+            return []
+        }
+    }
+
+    func analyzePhoneFrame(
+        _ frameData: Data,
+        experimentName: String,
+        experimentType: String,
+        currentStep: String,
+        materials: [String],
+        language: AppLanguage = .english
+    ) async -> PhoneVisionAnalysis? {
+        guard !geminiAPIKey.isEmpty else { return nil }
+
+        isAnalyzingPhoneFrame = true
+        phoneVisionErrorMessage = nil
+        defer { isAnalyzingPhoneFrame = false }
+
+        let materialSummary = materials.prefix(5).joined(separator: ", ")
+        let prompt = """
+        You are IRIS, a real-time AI lab assistant.
+        The student is doing the experiment "\(experimentName)" of type "\(experimentType)".
+        Current step: "\(currentStep)".
+        Relevant materials: \(materialSummary.isEmpty ? "Not provided" : materialSummary).
+
+        Look at this phone camera frame and respond in JSON only:
+        {
+          "status": "ok" | "warning",
+          "action": "advance" | "hold",
+          "message": "one short sentence to read aloud",
+          "should_store": true
+        }
+
+        Rules:
+        - Be specific to the current step.
+        - If the frame is too dark, blurry, or poorly framed, mention that.
+        - If the current step names a specific color, container, or material and the student appears to use the wrong one, set status to "warning" and name the mismatch.
+        - If the student appears to be doing the wrong thing, set status to "warning".
+        - Use action "advance" only when the current step is clearly complete and the app should move to the next step now.
+        - Otherwise use action "hold".
+        - Write the message in \(language.promptName).
+        - Keep the message under 24 words.
+        """
+
+        let payload = GeminiVisionRequest(
+            contents: [
+                .init(parts: [
+                    .init(inlineData: .init(mimeType: "image/jpeg", data: frameData.base64EncodedString())),
+                    .init(text: prompt)
+                ])
+            ],
+            generationConfig: .init(responseMimeType: "application/json", temperature: 0.2)
+        )
+
+        do {
+            guard let text = try await performGeminiRequest(payload) else {
+                phoneVisionErrorMessage = "Gemini phone vision returned no text."
+                return nil
+            }
+            return try JSONDecoder().decode(PhoneVisionAnalysis.self, from: Data(text.utf8))
+        } catch {
+            phoneVisionErrorMessage = "Phone vision error: \(error.localizedDescription)"
+            return nil
+        }
+    }
+
+    func answerPhoneQuestion(
+        _ question: String,
+        experimentName: String,
+        currentStep: String,
+        materials: [String],
+        language: AppLanguage = .english
+    ) async -> String? {
+        guard !geminiAPIKey.isEmpty else { return nil }
+
+        let materialSummary = materials.prefix(5).joined(separator: ", ")
+        let prompt = """
+        You are IRIS, a phone-based lab assistant.
+        Experiment: "\(experimentName)"
+        Current step: "\(currentStep)"
+        Materials: \(materialSummary.isEmpty ? "Not provided" : materialSummary)
+
+        Student question: "\(question)"
+
+        Answer in 2 short sentences maximum. Be clear, practical, and specific to the current step.
+        Respond in \(language.promptName).
+        """
+
+        let payload = GeminiVisionRequest(
+            contents: [.init(parts: [.init(text: prompt)])],
+            generationConfig: .init(responseMimeType: "text/plain", temperature: 0.3)
+        )
+
+        do {
+            return try await performGeminiRequest(payload)
+        } catch {
+            phoneVisionErrorMessage = "Phone Q&A error: \(error.localizedDescription)"
+            return nil
+        }
+    }
+
+    func summarizePhoneExperiment(
+        experimentName: String,
+        completedSteps: [String],
+        warnings: [String],
+        language: AppLanguage = .english
+    ) async -> String? {
+        guard !geminiAPIKey.isEmpty else { return nil }
+
+        let prompt = """
+        Summarize this lab session in 3 short sentences.
+        Experiment: "\(experimentName)"
+        Completed steps: \(completedSteps.joined(separator: "; "))
+        Warnings: \(warnings.isEmpty ? "None" : warnings.joined(separator: "; "))
+
+        Mention what the student accomplished, one observation or caution, and one encouraging closing sentence.
+        Respond in \(language.promptName).
+        """
+
+        let payload = GeminiVisionRequest(
+            contents: [.init(parts: [.init(text: prompt)])],
+            generationConfig: .init(responseMimeType: "text/plain", temperature: 0.3)
+        )
+
+        do {
+            return try await performGeminiRequest(payload)
+        } catch {
+            phoneVisionErrorMessage = "Phone summary error: \(error.localizedDescription)"
+            return nil
+        }
     }
 
     func testConnection() async -> Bool {
@@ -285,6 +504,11 @@ final class NetworkManager: NSObject, ObservableObject {
         isStreamConnected = false
     }
 
+    func stopAudioPlayback() {
+        audioPlayer?.stop()
+        audioPlayer = nil
+    }
+
     func sendPhoneFrame(_ frameData: Data, experimentType: String, currentStep: String) async {
         guard let phoneStreamTask else { return }
         let payload = PhoneFramePayload(
@@ -425,6 +649,26 @@ final class NetworkManager: NSObject, ObservableObject {
 
     private var baseHTTP: String { "http://\(normalizedServerAddress)" }
     private var baseWS: String { "ws://\(normalizedServerAddress)" }
+
+    private func performGeminiRequest<T: Encodable>(_ payload: T) async throws -> String? {
+        guard let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent") else {
+            return nil
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(geminiAPIKey, forHTTPHeaderField: "x-goog-api-key")
+        request.httpBody = try JSONEncoder().encode(payload)
+
+        let (data, response) = try await urlSession.data(for: request)
+        guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode else {
+            throw NSError(domain: "IRIS.Gemini", code: 1, userInfo: [NSLocalizedDescriptionKey: "Gemini request failed."])
+        }
+
+        let decoded = try JSONDecoder().decode(GeminiSearchAPIResponse.self, from: data)
+        return decoded.candidates.first?.content.parts.first(where: { $0.text != nil })?.text
+    }
 }
 
 // ─── Codable response models ──────────────────────────────────────────────────
@@ -478,6 +722,131 @@ private struct PhoneFramePayload: Encodable {
         case experimentType = "experiment_type"
         case currentStep = "current_step"
         case frameBase64 = "frame_base64"
+    }
+}
+
+private struct GeminiSearchRequest: Encodable {
+    let contents: [GeminiContent]
+    let tools: [GeminiTool]
+    let generationConfig: GeminiGenerationConfig
+}
+
+private struct GeminiContent: Encodable {
+    let parts: [GeminiPart]
+}
+
+private struct GeminiPart: Encodable {
+    var text: String?
+    var inlineData: GeminiInlineData?
+
+    init(text: String) {
+        self.text = text
+        self.inlineData = nil
+    }
+
+    init(inlineData: GeminiInlineData) {
+        self.text = nil
+        self.inlineData = inlineData
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case text
+        case inlineData = "inline_data"
+    }
+}
+
+private struct GeminiInlineData: Encodable {
+    let mimeType: String
+    let data: String
+
+    enum CodingKeys: String, CodingKey {
+        case mimeType = "mime_type"
+        case data
+    }
+}
+
+private struct GeminiTool: Encodable {
+    let googleSearch: GeminiGoogleSearchTool?
+
+    enum CodingKeys: String, CodingKey {
+        case googleSearch = "google_search"
+    }
+}
+
+private struct GeminiGoogleSearchTool: Encodable {}
+
+private struct GeminiGenerationConfig: Encodable {
+    let responseMimeType: String
+    let temperature: Double
+
+    enum CodingKeys: String, CodingKey {
+        case responseMimeType = "responseMimeType"
+        case temperature
+    }
+}
+
+private struct GeminiVisionRequest: Encodable {
+    let contents: [GeminiContent]
+    let generationConfig: GeminiGenerationConfig
+}
+
+private struct GeminiSearchAPIResponse: Decodable {
+    let candidates: [GeminiSearchCandidate]
+}
+
+private struct GeminiSearchCandidate: Decodable {
+    let content: GeminiSearchContent
+}
+
+private struct GeminiSearchContent: Decodable {
+    let parts: [GeminiSearchTextPart]
+}
+
+private struct GeminiSearchTextPart: Decodable {
+    let text: String?
+}
+
+struct PhoneVisionAnalysis: Decodable {
+    let status: String
+    let action: String?
+    let message: String
+    let shouldStore: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case status
+        case action
+        case message
+        case shouldStore = "should_store"
+    }
+
+    var isWarning: Bool {
+        status.caseInsensitiveCompare("warning") == .orderedSame
+    }
+
+    var shouldAdvance: Bool {
+        action?.caseInsensitiveCompare("advance") == .orderedSame
+    }
+}
+
+private struct GeminiSearchResultEnvelope: Decodable {
+    let experiments: [GeminiExperimentResult]
+}
+
+private struct GeminiExperimentResult: Decodable {
+    let name: String
+    let subject: String
+    let difficulty: String
+    let time: String
+    let description: String
+    let steps: [String]
+    let materials: [String]
+
+    var subjectValue: Subject {
+        Subject.allCases.first { $0.rawValue.caseInsensitiveCompare(subject) == .orderedSame } ?? .chemistry
+    }
+
+    var difficultyValue: Difficulty {
+        Difficulty.allCases.first { $0.rawValue.caseInsensitiveCompare(difficulty) == .orderedSame } ?? .beginner
     }
 }
 
