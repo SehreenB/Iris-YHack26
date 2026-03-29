@@ -4,82 +4,65 @@
     {
       "id": 0,
       "name": "setup",
-      "instruction": "Place two flasks on the desk — one with a GREEN label and one with a YELLOW label.",
-      "detect": "Two flasks visible on desk: one green-labeled, one yellow-labeled.",
-      "success": "Both flasks are on the desk. Ready to begin.",
-      "errors": [
-        "Only one flask visible — place the second flask on the desk.",
-        "No flasks visible — please place both flasks on the desk."
-      ]
+      "instruction": "Place two flasks on the desk — one GREEN, one YELLOW.",
+      "detect": "two flasks are visible",
+      "success": "Both flasks ready.",
+      "errors": []
     },
     {
       "id": 1,
       "name": "bring_baking_soda",
-      "instruction": "Bring the baking soda to the desk. It is in a yellow box labeled 'Pure Baking Soda'.",
-      "detect": "A yellow box labeled 'Pure Baking Soda' is visible on or near the desk, alongside the two flasks.",
-      "success": "Baking soda is on the desk.",
-      "errors": [
-        "I don't see the baking soda yet — look for a yellow box labeled 'Pure Baking Soda'."
-      ]
+      "instruction": "Bring the baking soda (yellow box) to the desk.",
+      "detect": "a yellow box is visible",
+      "success": "Baking soda is here.",
+      "errors": []
     },
     {
       "id": 2,
       "name": "pour_baking_soda",
-      "instruction": "Pour the baking soda into the GREEN flask.",
-      "detect": "Person is pouring or has poured white powder from the yellow box into the green-labeled flask. Pouring is considered when the person is holding with their hand the baking soda and is pointing it to the opening of the flask.",
-      "success": "Baking soda is in the green flask.",
-      "errors": [
-        "That's the yellow flask — pour into the GREEN flask instead.",
-        "Pour the baking soda into the flask, not onto the desk."
-      ]
+      "instruction": "Pour baking soda into the GREEN flask.",
+      "detect": "the yellow box is near, above, over, or close to the green flask",
+      "success": "Baking soda into green flask.",
+      "errors": ["yellow box is near the YELLOW flask instead"]
     },
     {
       "id": 3,
       "name": "remove_baking_soda",
-      "instruction": "Put the baking soda box away — remove it from the desk.",
-      "detect": "The yellow 'Pure Baking Soda' box is no longer visible. Only the two flasks remain.",
-      "success": "Baking soda is cleared away.",
-      "errors": [
-        "The baking soda box is still on the desk — please remove it."
-      ]
+      "instruction": "Remove the baking soda box from the desk.",
+      "detect": "no yellow cardboard box is visible (yellow flask does NOT count as the box)",
+      "success": "Baking soda cleared.",
+      "errors": ["yellow cardboard box still on desk"]
     },
     {
       "id": 4,
       "name": "bring_vinegar",
-      "instruction": "Bring the vinegar to the desk.",
-      "detect": "A bottle of vinegar is visible on or near the desk, alongside the two flasks.",
-      "success": "Vinegar is on the desk.",
-      "errors": [
-        "I don't see the vinegar yet — bring the vinegar bottle to the desk."
-      ]
+      "instruction": "Bring vinegar to the desk.",
+      "detect": "a bottle is visible",
+      "success": "Vinegar is here.",
+      "errors": []
     },
     {
       "id": 5,
       "name": "pour_vinegar",
-      "instruction": "Pour the vinegar into the YELLOW flask.",
-      "detect": "Person is pouring or has poured liquid from the vinegar bottle into the yellow-labeled flask. This step is considered completed when the person holds a bottle (vinegar) with their hand and is getting it close to the top opening of the yellow flask (beggining of pouring).",
-      "success": "Vinegar is in the yellow flask.",
-      "errors": [
-        "That's the green flask — pour into the YELLOW flask instead.",
-        "Pour the vinegar into the flask, not onto the desk."
-      ]
+      "instruction": "Pour vinegar into the YELLOW flask.",
+      "detect": "a bottle is near, above, over, or close to the yellow flask",
+      "success": "Vinegar into yellow flask.",
+      "errors": ["bottle is near the GREEN flask instead"]
     },
     {
       "id": 6,
       "name": "observe_reaction",
-      "instruction": "Pour the contents of the green flask into the yellow flask and observe the reaction.",
-      "detect": "Person is pouring from the green flask into the yellow flask, or fizzing/bubbling is visible in the yellow flask. This step is considered completed when the person holds the green flask with their hand and is getting it close to the top opening of the yellow flask.",
-      "success": "Reaction complete! You should see fizzing and bubbling as CO2 is released.",
-      "errors": [
-        "Pour the GREEN flask contents into the YELLOW flask — not the other way around."
-      ]
+      "instruction": "Pour green flask into yellow flask. Watch for fizzing!",
+      "detect": "green flask is near, above, or over the yellow flask, OR fizzing is visible",
+      "success": "Reaction happening!",
+      "errors": ["pouring yellow into green instead"]
     },
     {
       "id": 7,
       "name": "done",
       "instruction": "Experiment complete!",
       "detect": "N/A",
-      "success": "Great job! The experiment is finished.",
+      "success": "Great job!",
       "errors": []
     }
   ]
