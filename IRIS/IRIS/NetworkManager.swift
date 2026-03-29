@@ -29,11 +29,12 @@ final class NetworkManager: NSObject, ObservableObject {
     @Published var errorMessage: String?
     @Published var isLoading: Bool = false
     @Published var isStreamConnected: Bool = false
-    @Published var serverAddress: String = UserDefaults.standard.string(forKey: serverAddressKey) ?? "10.65.102.9:8000"
+    @Published var serverAddress: String = UserDefaults.standard.string(forKey: serverAddressKey) ?? "172.20.10.19:8000"
 
     // MARK: - Private
     private var audioPlayer: AVAudioPlayer?
     private var streamTask: URLSessionWebSocketTask?
+    private var phoneStreamTask: URLSessionWebSocketTask?
     private var urlSession: URLSession!
 
     override init() {
@@ -42,11 +43,14 @@ final class NetworkManager: NSObject, ObservableObject {
         config.timeoutIntervalForRequest  = 10
         config.timeoutIntervalForResource = 300
         urlSession = URLSession(configuration: config, delegate: nil, delegateQueue: nil)
-        configureAudioSession()
     }
 
     var websocketTarget: String {
         "ws://\(normalizedServerAddress)/experiment-stream"
+    }
+
+    var phoneWebsocketTarget: String {
+        "ws://\(normalizedServerAddress)/phone-stream"
     }
 
     func updateServerAddress(_ value: String) {
@@ -54,6 +58,36 @@ final class NetworkManager: NSObject, ObservableObject {
         guard !trimmedValue.isEmpty else { return }
         serverAddress = trimmedValue
         UserDefaults.standard.set(trimmedValue, forKey: Self.serverAddressKey)
+    }
+
+    func resetSessionState() {
+        steps = []
+        currentGuidanceText = ""
+        errorMessage = nil
+        isStreamConnected = false
+    }
+
+    func testConnection() async -> Bool {
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
+
+        guard let url = URL(string: "\(baseHTTP)/") else {
+            errorMessage = "Invalid server URL."
+            return false
+        }
+
+        do {
+            let (_, response) = try await urlSession.data(from: url)
+            guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode else {
+                errorMessage = "Backend responded with an unexpected status."
+                return false
+            }
+            return true
+        } catch {
+            errorMessage = serverUnreachableMessage(error)
+            return false
+        }
     }
 
     // MARK: - REST: Start experiment
@@ -217,9 +251,10 @@ final class NetworkManager: NSObject, ObservableObject {
             return
         }
 
+        disconnectStream()
         streamTask = urlSession.webSocketTask(with: url)
         streamTask?.resume()
-        isStreamConnected = true
+        isStreamConnected = false
         errorMessage       = nil
         receiveNextMessage()
     }
@@ -230,6 +265,47 @@ final class NetworkManager: NSObject, ObservableObject {
         isStreamConnected = false
     }
 
+    func connectPhoneStream() {
+        guard let url = URL(string: phoneWebsocketTarget) else {
+            errorMessage = "Invalid phone WebSocket URL."
+            return
+        }
+
+        disconnectPhoneStream()
+        phoneStreamTask = urlSession.webSocketTask(with: url)
+        phoneStreamTask?.resume()
+        isStreamConnected = false
+        errorMessage = nil
+        receiveNextPhoneMessage()
+    }
+
+    func disconnectPhoneStream() {
+        phoneStreamTask?.cancel(with: .goingAway, reason: nil)
+        phoneStreamTask = nil
+        isStreamConnected = false
+    }
+
+    func sendPhoneFrame(_ frameData: Data, experimentType: String, currentStep: String) async {
+        guard let phoneStreamTask else { return }
+        let payload = PhoneFramePayload(
+            experimentType: experimentType,
+            currentStep: currentStep,
+            frameBase64: frameData.base64EncodedString()
+        )
+
+        do {
+            let encoded = try JSONEncoder().encode(payload)
+            guard let jsonString = String(data: encoded, encoding: .utf8) else {
+                errorMessage = "Phone frame payload could not be encoded."
+                return
+            }
+            try await phoneStreamTask.send(.string(jsonString))
+        } catch {
+            isStreamConnected = false
+            errorMessage = serverUnreachableMessage(error)
+        }
+    }
+
     // MARK: - Private helpers
 
     private func receiveNextMessage() {
@@ -238,8 +314,27 @@ final class NetworkManager: NSObject, ObservableObject {
             Task { @MainActor in
                 switch result {
                 case .success(let message):
+                    self.isStreamConnected = true
                     self.handleStreamMessage(message)
                     self.receiveNextMessage()          // keep listening
+
+                case .failure(let error):
+                    self.isStreamConnected = false
+                    self.errorMessage = self.serverUnreachableMessage(error)
+                }
+            }
+        }
+    }
+
+    private func receiveNextPhoneMessage() {
+        phoneStreamTask?.receive { [weak self] result in
+            guard let self else { return }
+            Task { @MainActor in
+                switch result {
+                case .success(let message):
+                    self.isStreamConnected = true
+                    self.handleStreamMessage(message)
+                    self.receiveNextPhoneMessage()
 
                 case .failure(let error):
                     self.isStreamConnected = false
@@ -288,6 +383,7 @@ final class NetworkManager: NSObject, ObservableObject {
 
     private func playAudio(data: Data) {
         do {
+            configureAudioSession()
             audioPlayer = try AVAudioPlayer(data: data)
             audioPlayer?.prepareToPlay()
             audioPlayer?.play()
@@ -302,7 +398,7 @@ final class NetworkManager: NSObject, ObservableObject {
             try AVAudioSession.sharedInstance().setCategory(
                 .playback,
                 mode: .spokenAudio,
-                options: [.duckOthers, .allowBluetoothHFP]
+                options: [.duckOthers]
             )
             try AVAudioSession.sharedInstance().setActive(true)
         } catch {
@@ -371,6 +467,18 @@ struct EndExperimentResponse: Decodable {
 private struct StreamPayload: Decodable {
     let audio_base64: String?
     let text: String?
+}
+
+private struct PhoneFramePayload: Encodable {
+    let experimentType: String
+    let currentStep: String
+    let frameBase64: String
+
+    enum CodingKeys: String, CodingKey {
+        case experimentType = "experiment_type"
+        case currentStep = "current_step"
+        case frameBase64 = "frame_base64"
+    }
 }
 
 // ─── Integration notes ────────────────────────────────────────────────────────
