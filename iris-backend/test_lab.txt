@@ -1,0 +1,15 @@
+
+    Titration Lab Experiment
+    Objective: Determine the concentration of an unknown acid solution.
+    
+    Procedure:
+    1. Gather all equipment including burette, conical flask, and pipette
+    2. Rinse the burette with distilled water then with the NaOH solution
+    3. Fill the burette with 0.1M NaOH solution to the zero mark
+    4. Pipette exactly 25ml of the unknown acid into a conical flask
+    5. Add 3 drops of phenolphthalein indicator to the flask
+    6. Slowly add NaOH from the burette while swirling the flask
+    7. Stop when the solution turns permanently pink
+    8. Record the volume of NaOH used
+    9. Repeat for concordant results
+    
