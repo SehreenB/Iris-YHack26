@@ -5,6 +5,7 @@ from google.genai import types
 import asyncio
 import base64
 import httpx
+import json
 import os
 from dotenv import load_dotenv
 
@@ -46,6 +47,60 @@ class AskQuestionRequest(BaseModel):
 
 class StrugglesRequest(BaseModel):
     struggles: list[str]
+
+class SearchRequest(BaseModel):
+    query: str
+
+@app.post("/search-experiment")
+async def search_experiment(request: SearchRequest):
+    prompt = f"""A student wants to do a "{request.query}" experiment in a science lab.
+
+Return a JSON object with exactly these fields:
+{{
+  "name": "proper experiment name",
+  "subject": "one of: Chemistry, Biology, Physics, Engineering, Medicine, Environmental",
+  "difficulty": "one of: Beginner, Intermediate, Advanced",
+  "time": "estimated time e.g. 30 min",
+  "description": "one sentence description of what the student will learn",
+  "steps": ["step 1", "step 2", ...],
+  "materials": ["material 1", "material 2", ...]
+}}
+
+Steps should be maximum 10 words each. Return ONLY the JSON, nothing else."""
+
+    response = gemini_client.models.generate_content(
+        model='gemini-2.5-flash',
+        contents=prompt
+    )
+    
+    raw_text = response.text.strip()
+    if raw_text.startswith("```json"):
+        raw_text = raw_text[7:]
+    elif raw_text.startswith("```"):
+        raw_text = raw_text[3:]
+    if raw_text.endswith("```"):
+        raw_text = raw_text[:-3]
+    raw_text = raw_text.strip()
+    
+    try:
+        data = json.loads(raw_text)
+    except Exception as e:
+        return {"error": "Could not parse experiment"}
+        
+    state["steps"] = data.get("steps", [])
+    state["current_step"] = 0
+    state["experiment_type"] = data.get("name", "unknown")
+    
+    return {
+        "success": True,
+        "name": data.get("name"),
+        "subject": data.get("subject"),
+        "difficulty": data.get("difficulty"),
+        "time": data.get("time"),
+        "description": data.get("description"),
+        "steps": data.get("steps", []),
+        "materials": data.get("materials", [])
+    }
 
 @app.post("/set-struggles")
 async def set_struggles(request: StrugglesRequest):
