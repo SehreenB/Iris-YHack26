@@ -122,6 +122,25 @@ async def start_experiment(request: ExperimentRequest):
     lines = raw_text.strip().split("\n")
     steps = [line.strip() for line in lines if line.strip()]
     
+    materials_prompt = f"List the materials and equipment needed for a {request.experiment_type} experiment in a science lab. Return ONLY a JSON array of strings, nothing else. Example: [\"beaker\", \"burette\", \"indicator\"]. Maximum 10 items."
+
+    materials_response = gemini_client.models.generate_content(
+        model='gemini-2.5-flash',
+        contents=materials_prompt
+    )
+
+    import json as json_module
+    materials_text = materials_response.text.strip()
+    if materials_text.startswith("```"):
+        materials_text = materials_text.split("```")[1]
+        if materials_text.startswith("json"):
+            materials_text = materials_text[4:]
+    materials_text = materials_text.strip()
+    try:
+        materials = json_module.loads(materials_text)
+    except:
+        materials = []
+    
     state["steps"] = steps
     state["current_step"] = 0
     state["experiment_type"] = request.experiment_type
@@ -148,6 +167,7 @@ async def start_experiment(request: ExperimentRequest):
         "success": True,
         "experiment_type": request.experiment_type,
         "steps": steps,
+        "materials": materials,
         "current_step": 0,
         "audio_base64": audio_b64
     }
