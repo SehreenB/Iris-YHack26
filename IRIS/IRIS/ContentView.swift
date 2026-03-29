@@ -68,9 +68,14 @@ struct ContentView: View {
                                     }
                                 },
                                 onStart: {
-                                    session.startLiveSession(for: currentExperiment)
-                                    withAnimation(.easeInOut(duration: 0.18)) {
-                                        session.activeScreen = .assistant
+                                    Task {
+                                        let didStart = await session.startLiveSession(for: currentExperiment)
+                                        guard didStart else { return }
+                                        await MainActor.run {
+                                            withAnimation(.easeInOut(duration: 0.18)) {
+                                                session.activeScreen = .assistant
+                                            }
+                                        }
                                     }
                                 }
                             )
