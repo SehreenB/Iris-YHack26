@@ -1,6 +1,7 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, File, UploadFile
 from pydantic import BaseModel
-import anthropic
+from google import genai
+from google.genai import types
 import asyncio
 import base64
 import httpx
@@ -21,7 +22,9 @@ load_dotenv()
 app = FastAPI()
 
 ELEVENLABS_API_KEY = os.environ.get('ELEVENLABS_API_KEY')
-ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY')
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
+gemini_client = genai.Client(api_key=GEMINI_API_KEY)
+
 ESP32_CAPTURE_URL = os.environ.get("ESP32_CAPTURE_URL", "http://192.168.137.5/capture")
 OVERSHOOT_API_KEY = os.environ.get("OVERSHOOT_APIKEY")
 
@@ -56,20 +59,11 @@ def root():
 @app.post("/start-experiment")
 async def start_experiment(request: ExperimentRequest):
     
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-    
-    message = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=1024,
-        messages=[
-            {
-                "role": "user",
-                "content": f"List the step-by-step instructions for a {request.experiment_type} experiment in a science lab. Return ONLY a numbered list of steps, nothing else. Keep each step short and clear, maximum 10 words per step."
-            }
-        ]
+    response = gemini_client.models.generate_content(
+        model='gemini-2.5-flash',
+        contents=f"List the step-by-step instructions for a {request.experiment_type} experiment in a science lab. Return ONLY a numbered list of steps, nothing else. Keep each step short and clear, maximum 10 words per step."
     )
-    
-    raw_text = message.content[0].text
+    raw_text = response.text
     lines = raw_text.strip().split("\n")
     steps = [line.strip() for line in lines if line.strip()]
     
@@ -157,22 +151,13 @@ async def ask_question(request: AskQuestionRequest):
     if not state["steps"]:
         return {"error": "No experiment started"}
         
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-    
     prompt = f"You are a lab assistant helping a student with a {state['experiment_type']} experiment. They are currently on this step: {state['steps'][state['current_step']]}. The student asks: {request.question}. Answer in 2-3 sentences maximum. Be clear, helpful and simple \u2014 your response will be read aloud to the student."
     
-    message = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=256,
-        messages=[
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ]
+    response = gemini_client.models.generate_content(
+        model='gemini-2.5-flash',
+        contents=prompt
     )
-    
-    answer_text = message.content[0].text
+    answer_text = response.text
     
     tts_url = "https://api.elevenlabs.io/v1/text-to-speech/gJx1vCzNCD1EQHT212Ls"
     headers = {
@@ -211,20 +196,11 @@ async def end_experiment():
 
     prompt = f"You are a lab assistant. A student just completed a {experiment_type} experiment. \nThey completed {current_step + 1} out of {total_steps} steps.\nHere were the steps: {steps}\n\nWrite a short 3-4 sentence summary of what the student accomplished today. \nMention what scientific concept they practiced, what they should have observed, \nand one encouraging sentence. Keep it simple — it will be read aloud to the student."
 
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-    
-    message = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=300,
-        messages=[
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ]
+    response = gemini_client.models.generate_content(
+        model='gemini-2.5-flash',
+        contents=prompt
     )
-    
-    summary_text = message.content[0].text
+    summary_text = response.text
     
     tts_url = "https://api.elevenlabs.io/v1/text-to-speech/gJx1vCzNCD1EQHT212Ls"
     headers = {
@@ -283,22 +259,13 @@ async def upload_document(file: UploadFile = File(...)):
         
     state["lab_document"] = extracted_text
     
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-    
     prompt = f"You are a lab assistant. Here is a lab document a student uploaded:\n\n{extracted_text}\n\nExtract and return ONLY a numbered list of the procedure steps the student needs to follow. Maximum 10 words per step. Return nothing else."
     
-    message = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=1024,
-        messages=[
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ]
+    response = gemini_client.models.generate_content(
+        model='gemini-2.5-flash',
+        contents=prompt
     )
-    
-    raw_text = message.content[0].text
+    raw_text = response.text
     lines = raw_text.strip().split("\n")
     steps = [line.strip() for line in lines if line.strip()]
     
@@ -316,8 +283,6 @@ async def upload_document(file: UploadFile = File(...)):
 async def generate_report():
     if not state.get("steps"):
         return {"error": "No experiment completed"}
-    
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
     
     struggles_text = ", ".join(state["struggles"]) if state.get("struggles") else "general guidance"
     lab_doc_context = f"\nOriginal lab document they were given:\n{state['lab_document']}" if state.get("lab_document") else ""
@@ -342,18 +307,12 @@ Do NOT write the lab report for them. Instead do the following:
 
 Keep it warm, specific, and actionable. The student will read this and use it to write their report themselves."""
 
-    message = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=2000,
-        messages=[
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ]
+    response = gemini_client.models.generate_content(
+        model='gemini-2.5-flash',
+        contents=prompt
     )
     
-    coaching_text = message.content[0].text
+    coaching_text = response.text
     
     return {
         "coaching_text": coaching_text,
@@ -426,24 +385,17 @@ async def experiment_stream(websocket: WebSocket):
                     if text_to_say and text_to_say != last_spoken_guidance:
                         last_spoken_guidance = text_to_say
                         
-                        anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
                         current_experiment = state.get("experiment_type", "unknown")
                         current_step_text = state["steps"][state["current_step"]] if state.get("steps") else "Waiting for experiment to start"
                         
                         struggles_text = ", ".join(state["struggles"]) if state.get("struggles") else "none specified"
                         enrich_prompt = f"You are a lab assistant speaking to a student doing a {current_experiment} experiment on step: {current_step_text}. The student has told you they struggle with: {struggles_text}. The vision system just said: \"{text_to_say}\" In ONE sentence only, add a brief helpful tip tailored to their struggles if relevant, or a scientific explanation of what they should be seeing. Keep it simple and natural \u2014 it will be read aloud. If the vision system flagged an error, just return the error message unchanged without adding explanation."
                         
-                        message = anthropic_client.messages.create(
-                            model="claude-sonnet-4-6",
-                            max_tokens=100,
-                            messages=[
-                                {
-                                    "role": "user",
-                                    "content": enrich_prompt
-                                }
-                            ]
+                        response = gemini_client.models.generate_content(
+                            model='gemini-2.5-flash',
+                            contents=enrich_prompt
                         )
-                        enriched_text = message.content[0].text
+                        enriched_text = response.text
                         
                         tts_url = "https://api.elevenlabs.io/v1/text-to-speech/gJx1vCzNCD1EQHT212Ls"
                         headers = {
@@ -534,17 +486,15 @@ async def phone_stream(websocket: WebSocket):
                 if text_to_say and text_to_say != last_spoken_guidance:
                     last_spoken_guidance = text_to_say
                     
-                    anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
                     struggles_text = ", ".join(state["struggles"]) if state.get("struggles") else "none specified"
                     
                     enrich_prompt = f"You are a lab assistant speaking to a student doing a {exp_type} experiment on step: {current_step_text}. The student has told you they struggle with: {struggles_text}. The vision system just said: \"{text_to_say}\" In ONE sentence only, add a brief helpful tip tailored to their struggles if relevant, or a scientific explanation of what they should be seeing. Keep it simple and natural \u2014 it will be read aloud. If the vision system flagged an error, just return the error message unchanged without adding explanation."
                     
-                    message = anthropic_client.messages.create(
-                        model="claude-sonnet-4-6",
-                        max_tokens=100,
-                        messages=[{"role": "user", "content": enrich_prompt}]
+                    response = gemini_client.models.generate_content(
+                        model='gemini-2.5-flash',
+                        contents=enrich_prompt
                     )
-                    enriched_text = message.content[0].text
+                    enriched_text = response.text
                     
                     tts_url = "https://api.elevenlabs.io/v1/text-to-speech/gJx1vCzNCD1EQHT212Ls"
                     headers = {
