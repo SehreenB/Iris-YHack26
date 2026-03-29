@@ -10,6 +10,7 @@
 
 import AVFoundation
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct AssistantScreen: View {
     let experiment: Experiment
@@ -25,60 +26,61 @@ struct AssistantScreen: View {
     }
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: 0) {
+        ZStack(alignment: .top) {
+            ScrollView(showsIndicators: false) {
                 VStack(spacing: 0) {
-                    NavBar(
-                        title: experiment.name,
-                        label: "LIVE SESSION",
-                        foreground: .white,
-                        compact: true,
-                        rightElement: AnyView(
-                            HStack(spacing: 10) {
-                                HStack(spacing: 6) {
-                                    Circle()
-                                        .fill(Color.white)
-                                        .frame(width: 6, height: 6)
-                                    Text("Live")
-                                        .font(.system(size: 10, weight: .bold, design: .rounded))
-                                }
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 11)
-                                .padding(.vertical, 7)
-                                .background(IrisPalette.flame, in: Capsule())
+                    VStack(spacing: 0) {
+                        NavBar(
+                            title: experiment.localizedName(session.selectedLanguage),
+                            label: session.t("LIVE SESSION"),
+                            foreground: .white,
+                            compact: true,
+                            rightElement: AnyView(
+                                HStack(spacing: 10) {
+                                    HStack(spacing: 6) {
+                                        Circle()
+                                            .fill(Color.white)
+                                            .frame(width: 6, height: 6)
+                                        Text(session.t("Live"))
+                                            .font(.irisEyebrow)
+                                    }
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 11)
+                                    .padding(.vertical, 7)
+                                    .background(IrisPalette.flame, in: Capsule())
 
-                                Button(action: onEnd) {
-                                    Image(systemName: "xmark")
-                                        .font(.system(size: 13, weight: .bold))
-                                        .foregroundStyle(.white)
-                                        .frame(width: 30, height: 30)
-                                        .background(Color.white.opacity(0.12), in: Circle())
+                                    Button(action: onEnd) {
+                                        Image(systemName: "xmark")
+                                            .font(.system(size: 13, weight: .bold))
+                                            .foregroundStyle(.white)
+                                            .frame(width: 30, height: 30)
+                                            .background(Color.white.opacity(0.12), in: Circle())
+                                    }
                                 }
-                            }
+                            )
                         )
-                    )
-                }
-                .padding(.bottom, 8)
-                .background(IrisPalette.tealInk)
+                    }
+                    .padding(.bottom, 8)
+                    .background(IrisPalette.tealInk)
 
-                ZStack {
-                    if session.isUsingExternalCamera {
-                        RoundedRectangle(cornerRadius: 0, style: .continuous)
-                            .fill(IrisPalette.tealInk)
-                            .frame(height: 240)
+                    ZStack {
+                        if session.selectedCameraMode == .glasses {
+                            RoundedRectangle(cornerRadius: 0, style: .continuous)
+                                .fill(IrisPalette.tealInk)
+                                .frame(height: 240)
 
                         VStack(spacing: 10) {
                             Circle()
                                 .fill(IrisPalette.viridian.opacity(0.15))
                                 .frame(width: 54, height: 54)
                                 .overlay {
-                                    Image(systemName: "network")
+                                        Image(systemName: "eyeglasses")
                                         .font(.system(size: 24, weight: .medium))
                                         .foregroundStyle(IrisPalette.viridian)
                                 }
 
                             Text(session.cameraSource)
-                                .font(.system(size: 12, weight: .medium, design: .rounded))
+                                .font(.irisBodySmall)
                                 .foregroundStyle(IrisPalette.viridian)
                         }
                     } else {
@@ -101,25 +103,26 @@ struct AssistantScreen: View {
                                     }
 
                                 Text(session.cameraSource)
-                                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                                    .font(.irisBodySmall)
                                     .foregroundStyle(IrisPalette.viridian)
 
                                 if let errorMessage = session.cameraManager.errorMessage, !errorMessage.isEmpty {
                                     Text(errorMessage)
-                                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                                        .font(.irisCaption)
                                         .foregroundStyle(IrisPalette.paleTeal)
-                                }
-                            }
-                        }
                     }
+                }
+            }
+        }
+    }
                 }
 
                 HStack(spacing: 14) {
                     Text("\(session.currentStepIndex)")
-                        .font(.system(size: 22, weight: .medium, design: .serif))
+                        .font(.irisDisplayM)
                         .foregroundStyle(IrisPalette.tealInk)
                     Text("/\(activeExperiment.steps.count)")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .font(.irisBodySmall)
                         .foregroundStyle(IrisPalette.tealInk.opacity(0.35))
 
                     HStack(spacing: 6) {
@@ -150,12 +153,12 @@ struct AssistantScreen: View {
                                 }
 
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("IRIS IS SAYING")
-                                    .font(.system(size: 9, weight: .bold, design: .rounded))
+                                Text(session.t("IRIS IS SAYING"))
+                                    .font(.irisEyebrow)
                                     .tracking(1.2)
                                     .foregroundStyle(IrisPalette.viridian)
                                 Text(session.networkManager.currentGuidanceText)
-                                    .font(.system(size: 15, weight: .medium, design: .rounded))
+                                    .font(.irisSubheadline)
                                     .foregroundStyle(IrisPalette.tealInk)
                             }
 
@@ -176,7 +179,7 @@ struct AssistantScreen: View {
                                 .font(.system(size: 14, weight: .bold))
                                 .foregroundStyle(IrisPalette.flame)
                             Text(streamError)
-                                .font(.system(size: 12, weight: .medium, design: .rounded))
+                                .font(.irisBodySmall)
                                 .foregroundStyle(IrisPalette.flame)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
@@ -191,20 +194,20 @@ struct AssistantScreen: View {
                                 .frame(width: 38, height: 38)
                                 .overlay {
                                     Text("\(session.currentStepIndex)")
-                                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                                        .font(.irisHeadline)
                                         .foregroundStyle(.white)
                                 }
 
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(currentStepText)
-                                    .font(.system(size: 21, weight: .medium, design: .serif))
+                                    .font(.irisDisplayM)
                                     .foregroundStyle(IrisPalette.tealInk)
                                 HStack(spacing: 8) {
                                     Circle()
                                         .fill(session.currentStatus == .error ? IrisPalette.flame : IrisPalette.viridian)
                                         .frame(width: 8, height: 8)
-                                    Text(session.currentStatus == .error ? "Needs review" : "Watching")
-                                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                                    Text(session.t(session.currentStatus == .error ? "Needs review" : "Watching"))
+                                        .font(.irisBody)
                                         .foregroundStyle(session.currentStatus == .error ? IrisPalette.flame : IrisPalette.viridian)
                                 }
                             }
@@ -225,23 +228,23 @@ struct AssistantScreen: View {
                             HStack {
                                 HStack(spacing: 6) {
                                     Image(systemName: "exclamationmark.triangle.fill")
-                                    Text("Error detected")
+                                    Text(session.t("Error detected"))
                                 }
                                 .font(.system(size: 10, weight: .bold, design: .rounded))
                                 .foregroundStyle(IrisPalette.flame)
 
                                 Spacer()
 
-                                Text("Live")
+                                Text(session.t("Live"))
                                     .font(.system(size: 10, weight: .medium, design: .rounded))
                                     .foregroundStyle(IrisPalette.flame.opacity(0.55))
                             }
 
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(session.lastErrorMessage ?? "Correction needed")
+                                Text(session.lastErrorMessage ?? session.t("Correction needed"))
                                     .font(.system(size: 22, weight: .medium, design: .serif))
                                     .foregroundStyle(IrisPalette.tealInk)
-                                Text("Review the issue and acknowledge it when resolved.")
+                                Text(session.t("Review the issue and acknowledge it when resolved."))
                                     .font(.system(size: 14, weight: .medium, design: .rounded))
                                     .foregroundStyle(IrisPalette.flame)
                             }
@@ -251,7 +254,7 @@ struct AssistantScreen: View {
                                     session.acknowledgeError()
                                 }
                             } label: {
-                                Text("Got it")
+                                Text(session.t("Got it"))
                                     .font(.system(size: 12, weight: .bold, design: .rounded))
                                     .foregroundStyle(IrisPalette.flame)
                                     .padding(.horizontal, 16)
@@ -269,12 +272,12 @@ struct AssistantScreen: View {
                         }
                     }
 
-                    SectionHeader(label: "Guidance", color: IrisPalette.viridian)
+                    SectionHeader(label: session.t("Guidance"), color: IrisPalette.viridian)
                         .padding(.horizontal, -18)
 
                     if !displayTranscript.isEmpty {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("Transcript")
+                            Text(session.t("Transcript"))
                                 .font(.system(size: 10, weight: .bold, design: .rounded))
                                 .tracking(1)
                                 .foregroundStyle(IrisPalette.flame)
@@ -289,7 +292,7 @@ struct AssistantScreen: View {
 
                     VStack(spacing: 10) {
                         HStack(spacing: 10) {
-                            TextField("Ask about the current step", text: $questionDraft)
+                            TextField(session.t("Ask about the current step"), text: $questionDraft)
                                 .textFieldStyle(.plain)
                                 .font(.system(size: 14, weight: .medium, design: .rounded))
                                 .padding(.horizontal, 14)
@@ -300,7 +303,7 @@ struct AssistantScreen: View {
                                 session.submitQuestion(questionDraft)
                                 questionDraft = ""
                             } label: {
-                                Text("Send")
+                                Text(session.t("Send"))
                                     .font(.system(size: 13, weight: .bold, design: .rounded))
                                     .foregroundStyle(.white)
                                     .frame(width: 72, height: 44)
@@ -312,7 +315,7 @@ struct AssistantScreen: View {
                             Button {
                                 session.advanceCurrentStep()
                             } label: {
-                                Label("Next step", systemImage: "checkmark.circle.fill")
+                                Label(session.t("Next step"), systemImage: "checkmark.circle.fill")
                                     .font(.system(size: 13, weight: .bold, design: .rounded))
                                     .foregroundStyle(.white)
                                     .frame(maxWidth: .infinity)
@@ -324,7 +327,7 @@ struct AssistantScreen: View {
                                 Button {
                                     session.advanceCurrentStep()
                                 } label: {
-                                    Label("Confirm step", systemImage: "checkmark.circle.fill")
+                                    Label(session.t("Confirm step"), systemImage: "checkmark.circle.fill")
                                         .font(.system(size: 13, weight: .bold, design: .rounded))
                                         .foregroundStyle(.white)
                                         .frame(maxWidth: .infinity)
@@ -332,7 +335,7 @@ struct AssistantScreen: View {
                                         .background(IrisPalette.viridian, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                                 }
 
-                                TextField("Flag an issue", text: $issueDraft)
+                                TextField(session.t("Flag an issue"), text: $issueDraft)
                                     .textFieldStyle(.plain)
                                     .font(.system(size: 14, weight: .medium, design: .rounded))
                                     .padding(.horizontal, 14)
@@ -355,8 +358,8 @@ struct AssistantScreen: View {
                     VStack(spacing: 0) {
                         if session.guidanceFeed.isEmpty {
                             EmptyStateCard(
-                                title: session.appMode == .live ? "Waiting for backend events" : "No live events yet",
-                                message: session.appMode == .live ? "Start the experiment stream, ask a question, or advance a step to populate guidance." : "Ask a question, confirm a step, or flag an issue to populate the guidance feed."
+                                title: session.t(session.appMode == .live ? "Waiting for backend events" : "No live events yet"),
+                                message: session.t(session.appMode == .live ? "Start the experiment stream, ask a question, or advance a step to populate guidance." : "Ask a question, confirm a step, or flag an issue to populate the guidance feed.")
                             )
                         } else {
                             ForEach(session.guidanceFeed.reversed()) { item in
@@ -378,27 +381,27 @@ struct AssistantScreen: View {
         .overlay(alignment: .bottom) {
             VStack(spacing: 8) {
                 ZStack {
-                    if isPressing {
+                    if isPressing || session.speechCoordinator.isWakeListening {
                         Circle()
-                            .fill(IrisPalette.flame.opacity(0.18))
-                            .frame(width: 86, height: 86)
-                            .blur(radius: 12)
+                            .fill((isPressing ? IrisPalette.flame : IrisPalette.coolAqua).opacity(0.18))
+                            .frame(width: session.speechCoordinator.isWakeListening ? 94 : 86, height: session.speechCoordinator.isWakeListening ? 94 : 86)
+                            .blur(radius: session.speechCoordinator.isWakeListening ? 16 : 12)
                     }
 
                     Circle()
-                        .fill(isPressing ? IrisPalette.flame : IrisPalette.tealInk)
+                        .fill(isPressing ? IrisPalette.flame : (session.speechCoordinator.isWakeListening ? IrisPalette.coolAqua : IrisPalette.tealInk))
                         .frame(width: 72, height: 72)
                         .overlay {
                             Circle()
                                 .stroke(
-                                    isPressing ? Color.white.opacity(0.45) : IrisPalette.viridian.opacity(0.35),
+                                    isPressing ? Color.white.opacity(0.45) : (session.speechCoordinator.isWakeListening ? Color.white.opacity(0.4) : IrisPalette.viridian.opacity(0.35)),
                                     style: StrokeStyle(lineWidth: 1, dash: [5, 4])
                                 )
                                 .padding(7)
 
                             Image(systemName: "mic.fill")
                                 .font(.system(size: 26, weight: .semibold))
-                                .foregroundStyle(isPressing ? .white : IrisPalette.viridian)
+                                .foregroundStyle(isPressing || session.speechCoordinator.isWakeListening ? .white : IrisPalette.viridian)
                         }
                         .gesture(
                             DragGesture(minimumDistance: 0)
@@ -418,15 +421,21 @@ struct AssistantScreen: View {
                                 }
                         )
                         .shadow(color: Color.black.opacity(0.16), radius: 16, y: 8)
+                        .scaleEffect(session.speechCoordinator.isWakeListening && !isPressing ? 1.05 : 1.0)
+                        .animation(.easeInOut(duration: 0.22), value: session.speechCoordinator.isWakeListening)
                 }
 
-                Text(session.speechCoordinator.isListening ? "LISTENING" : "HOLD TO SPEAK")
+                Text(
+                    session.speechCoordinator.isListening
+                    ? session.t("LISTENING")
+                    : (session.speechCoordinator.isWakeListening ? session.t("SAY HEY IRIS OR HOLD TO SPEAK") : session.t("HOLD TO SPEAK"))
+                )
                     .font(.system(size: 10, weight: .bold, design: .rounded))
                     .tracking(1.8)
                     .foregroundStyle(session.speechCoordinator.isListening ? IrisPalette.flame : IrisPalette.viridian.opacity(0.7))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 5)
-                    .background(Color.white.opacity(session.speechCoordinator.isListening ? 0.92 : 0), in: Capsule())
+                    .background(Color.white.opacity(session.speechCoordinator.isListening || session.speechCoordinator.isWakeListening ? 0.92 : 0), in: Capsule())
 
                 if let speechError = session.speechCoordinator.errorMessage, !speechError.isEmpty {
                     Text(speechError)
@@ -441,8 +450,9 @@ struct AssistantScreen: View {
     }
 
     private var currentStepText: String {
-        let safeIndex = min(max(session.currentStepIndex - 1, 0), max(activeExperiment.steps.count - 1, 0))
-        return activeExperiment.steps[safeIndex]
+        let localizedSteps = activeExperiment.localizedSteps(session.selectedLanguage)
+        let safeIndex = min(max(session.currentStepIndex - 1, 0), max(localizedSteps.count - 1, 0))
+        return localizedSteps[safeIndex]
     }
 
     private var displayTranscript: String {
@@ -478,87 +488,89 @@ struct ReportScreen: View {
     let onBack: () -> Void
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: 0) {
+        ZStack(alignment: .top) {
+            ScrollView(showsIndicators: false) {
                 VStack(spacing: 0) {
-                    NavBar(
-                        title: "Lab report",
-                        label: "REPORT",
-                        onBack: onBack,
-                        foreground: .white,
-                        compact: true,
-                        rightElement: AnyView(
+                    VStack(spacing: 0) {
+                        NavBar(
+                            title: session.t("Lab report"),
+                            label: session.t("REPORT"),
+                            onBack: onBack,
+                            foreground: .white,
+                            compact: true,
+                            rightElement: AnyView(
+                                HStack(spacing: 6) {
+                                    Image(systemName: "arrow.down.circle")
+                                    Text(session.t("Export"))
+                                }
+                                .font(.system(size: 10, weight: .bold, design: .rounded))
+                                .foregroundStyle(IrisPalette.coolAqua)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(IrisPalette.viridian.opacity(0.2), in: Capsule())
+                            )
+                        )
+                    }
+                    .padding(.bottom, 8)
+                    .background(IrisPalette.tealInk)
+
+                    HStack {
+                        Spacer()
+                        if session.reportStatus == .complete {
                             HStack(spacing: 6) {
-                                Image(systemName: "arrow.down.circle")
-                                Text("Export")
+                                Image(systemName: "checkmark")
+                                Text(session.t("Report complete"))
                             }
                             .font(.system(size: 10, weight: .bold, design: .rounded))
-                            .foregroundStyle(IrisPalette.coolAqua)
+                            .foregroundStyle(IrisPalette.viridian)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
-                            .background(IrisPalette.viridian.opacity(0.2), in: Capsule())
-                        )
-                    )
-                }
-                .padding(.bottom, 8)
-                .background(IrisPalette.tealInk)
-
-                HStack {
-                    Spacer()
-                    if session.reportStatus == .complete {
-                        HStack(spacing: 6) {
-                            Image(systemName: "checkmark")
-                            Text("Report complete")
+                            .background(IrisPalette.viridian.opacity(0.12), in: Capsule())
+                        } else {
+                            HStack(spacing: 6) {
+                                Circle()
+                                    .fill(Color.white)
+                                    .frame(width: 6, height: 6)
+                                Text(session.t("Building live..."))
+                            }
+                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(IrisPalette.flame, in: Capsule())
                         }
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
-                        .foregroundStyle(IrisPalette.viridian)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(IrisPalette.viridian.opacity(0.12), in: Capsule())
-                    } else {
-                        HStack(spacing: 6) {
-                            Circle()
-                                .fill(Color.white)
-                                .frame(width: 6, height: 6)
-                            Text("Building live...")
-                        }
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(IrisPalette.flame, in: Capsule())
+                        Spacer()
                     }
-                    Spacer()
-                }
-                .padding(.vertical, 12)
-                .background(IrisPalette.mintMist.opacity(0.45))
+                    .padding(.vertical, 12)
+                    .background(IrisPalette.mintMist.opacity(0.45))
 
-                VStack(spacing: 16) {
+                    VStack(spacing: 16) {
                     ConnectionStatusRow(statuses: session.connectionStatuses)
 
-                    ReportSection(title: "Procedure followed", accent: IrisPalette.viridian, background: IrisPalette.mintMist.opacity(0.3), updated: session.generatedReport.procedure.isEmpty ? nil : "Live") {
+                    ReportSection(title: session.t("Procedure followed"), accent: IrisPalette.viridian, background: IrisPalette.mintMist.opacity(0.3), updated: session.generatedReport.procedure.isEmpty ? nil : session.t("Live")) {
                         if session.generatedReport.procedure.isEmpty {
-                            Text("No confirmed steps yet.")
+                            Text(session.t("No confirmed steps yet."))
                                 .font(.system(size: 14, weight: .medium, design: .rounded))
                                 .foregroundStyle(IrisPalette.tealInk.opacity(0.55))
                         } else {
                             VStack(alignment: .leading, spacing: 12) {
                                 ForEach(Array(session.generatedReport.procedure.enumerated()), id: \.offset) { index, step in
                                     reportLine(number: "\(index + 1).", text: step)
-                                }
-                            }
-                        }
                     }
+                }
+            }
+        }
+    }
 
-                    ReportSection(title: "Observations", accent: IrisPalette.coolAqua, background: Color.white, updated: session.generatedReport.observations == "No observations captured yet." ? nil : "Live") {
+                    ReportSection(title: session.t("Observations"), accent: IrisPalette.coolAqua, background: Color.white, updated: session.generatedReport.observations == "No observations captured yet." ? nil : session.t("Live")) {
                         Text(session.generatedReport.observations)
                             .font(.system(size: 14, weight: .medium, design: .rounded))
                             .foregroundStyle(IrisPalette.tealInk)
                     }
 
-                    ReportSection(title: "Errors flagged", accent: IrisPalette.flame, background: IrisPalette.warmBlush, titleColor: IrisPalette.flame, updated: session.generatedReport.errors.isEmpty ? nil : "Live") {
+                    ReportSection(title: session.t("Errors flagged"), accent: IrisPalette.flame, background: IrisPalette.warmBlush, titleColor: IrisPalette.flame, updated: session.generatedReport.errors.isEmpty ? nil : session.t("Live")) {
                         if session.generatedReport.errors.isEmpty {
-                            Text("No issues have been flagged.")
+                            Text(session.t("No issues have been flagged."))
                                 .font(.system(size: 14, weight: .medium, design: .rounded))
                                 .foregroundStyle(IrisPalette.tealInk.opacity(0.55))
                         } else {
@@ -570,7 +582,7 @@ struct ReportScreen: View {
                         }
                     }
 
-                    ReportSection(title: "Key findings", accent: IrisPalette.viridian, background: IrisPalette.mintMist.opacity(0.3), updated: "Live") {
+                    ReportSection(title: session.t("Key findings"), accent: IrisPalette.viridian, background: IrisPalette.mintMist.opacity(0.3), updated: session.t("Live")) {
                         VStack(alignment: .leading, spacing: 12) {
                             ForEach(session.generatedReport.findings, id: \.self) { finding in
                                 reportSimpleBullet(finding)
@@ -578,9 +590,9 @@ struct ReportScreen: View {
                         }
                     }
 
-                    ReportSection(title: "Suggested improvements", accent: IrisPalette.paleTeal, background: Color.white, updated: session.generatedReport.suggestions.isEmpty ? nil : "Live") {
+                    ReportSection(title: session.t("Suggested improvements"), accent: IrisPalette.paleTeal, background: Color.white, updated: session.generatedReport.suggestions.isEmpty ? nil : session.t("Live")) {
                         if session.generatedReport.suggestions.isEmpty {
-                            Text("No suggestions available yet.")
+                            Text(session.t("No suggestions available yet."))
                                 .font(.system(size: 14, weight: .medium, design: .rounded))
                                 .foregroundStyle(IrisPalette.tealInk.opacity(0.55))
                         } else {
@@ -601,7 +613,7 @@ struct ReportScreen: View {
             ShareLink(item: reportExportText) {
                 HStack(spacing: 10) {
                     Image(systemName: "arrow.down.circle.fill")
-                    Text("Export report")
+                    Text(session.t("Export report"))
                         .fontWeight(.bold)
                 }
                 .foregroundStyle(.white)
@@ -670,19 +682,19 @@ struct ReportScreen: View {
         IRIS Lab Report
 
         Procedure Followed:
-        \(procedureLines.isEmpty ? "No confirmed steps." : procedureLines)
+        \(procedureLines.isEmpty ? session.t("No confirmed steps.") : procedureLines)
 
         Observations:
         \(session.generatedReport.observations)
 
         Errors Flagged:
-        \(errorLines.isEmpty ? "None" : errorLines)
+        \(errorLines.isEmpty ? session.t("None") : errorLines)
 
         Key Findings:
         \(findingLines)
 
         Suggested Improvements:
-        \(suggestionLines.isEmpty ? "None" : suggestionLines)
+        \(suggestionLines.isEmpty ? session.t("None") : suggestionLines)
         """
     }
 }
@@ -696,186 +708,154 @@ struct SettingsScreen: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 0) {
-                NavBar(title: "Settings", compact: true)
+                NavBar(title: session.t("Settings"), compact: true)
 
-                SectionHeader(label: "Mode", color: IrisPalette.flame, compact: true)
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Hackathon runtime")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
-                        .foregroundStyle(IrisPalette.tealInk)
+                SectionHeader(label: session.t("Runtime"), color: IrisPalette.flame, compact: true)
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(session.t("Choose how IRIS runs during the experiment."))
+                        .font(.irisBodySmall)
+                        .foregroundStyle(IrisPalette.tealInk.opacity(0.62))
 
                     HStack(spacing: 8) {
-                        modeButton(title: "Demo", mode: .demo)
-                        modeButton(title: "Live", mode: .live)
+                        modeButton(title: session.t("Demo"), mode: .demo)
+                        modeButton(title: session.t("Live"), mode: .live)
                     }
 
-                    Text(session.appMode == .demo ? "Uses safe local fallback responses for judging." : "Uses Sehreen's start-experiment, websocket stream, and advance-step flow.")
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
-                        .foregroundStyle(IrisPalette.tealInk.opacity(0.5))
+                    Text(session.t(session.appMode == .demo ? "Demo mode stays self-contained for judging." : "Live mode uses Sehreen's backend only for smart-glasses sessions."))
+                        .font(.irisCaption)
+                        .foregroundStyle(IrisPalette.tealInk.opacity(0.55))
                 }
                 .padding(.horizontal, 18)
                 .padding(.vertical, 12)
-                .background(Color.white)
-                .overlay(alignment: .bottom) {
-                    Divider().overlay(IrisPalette.mintMist)
-                }
 
-                SectionHeader(label: "Server", color: IrisPalette.flame, compact: true)
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Backend address (Sehreen's laptop)")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
-                        .foregroundStyle(IrisPalette.tealInk)
-
-                    TextField("192.168.x.x:8000", text: Binding(
-                        get: { backendURLDraft },
-                        set: { newValue in
-                            backendURLDraft = newValue
-                            session.networkManager.updateServerAddress(newValue)
+                SectionHeader(label: session.t("Appearance"), compact: true)
+                VStack(spacing: 10) {
+                    HStack(spacing: 8) {
+                        ForEach(AppearanceMode.allCases) { mode in
+                            appearanceButton(mode)
                         }
-                    ))
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .keyboardType(.numbersAndPunctuation)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
-                    .padding(.horizontal, 14)
-                    .frame(height: 42)
-                    .background(IrisPalette.cleanWhite, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .stroke(IrisPalette.paleTeal.opacity(0.7), lineWidth: 1)
-                    }
-
-                    Text("WebSocket target: \(session.networkManager.websocketTarget)")
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
-                        .foregroundStyle(IrisPalette.tealInk.opacity(0.45))
-                        .lineLimit(2)
-
-                    Button {
-                        Task {
-                            let success = await session.networkManager.testConnection()
-                            await MainActor.run {
-                                connectionTestSucceeded = success
-                                connectionTestMessage = success
-                                    ? "Connected to Sehreen's backend."
-                                    : (session.networkManager.errorMessage ?? "Could not reach the backend.")
-                            }
-                        }
-                    } label: {
-                        HStack(spacing: 8) {
-                            if session.networkManager.isLoading {
-                                ProgressView()
-                                    .tint(.white)
-                            }
-                            Text(session.networkManager.isLoading ? "Testing..." : "Test connection")
-                                .font(.system(size: 12, weight: .bold, design: .rounded))
-                        }
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 40)
-                        .background(IrisPalette.tealInk, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    }
-                    .disabled(session.networkManager.isLoading)
-
-                    if let connectionTestMessage {
-                        Text(connectionTestMessage)
-                            .font(.system(size: 11, weight: .medium, design: .rounded))
-                            .foregroundStyle(connectionTestSucceeded ? IrisPalette.viridian : IrisPalette.flame)
-                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 .padding(.horizontal, 18)
                 .padding(.vertical, 12)
-                .background(Color.white)
-                .overlay(alignment: .bottom) {
-                    Divider().overlay(IrisPalette.mintMist)
-                }
 
-                SectionHeader(label: "Camera", compact: true)
-                SettingsRow(label: "Default lens", value: session.cameraSource, compact: true)
-
-                SectionHeader(label: "Voice", color: IrisPalette.flame, compact: true)
-                SettingsRow(label: "Speech input", value: session.speechCoordinator.microphoneGranted ? "Authorized" : "Needs permission", compact: true)
-                SettingsRow(label: "Voice output", value: "Backend audio", compact: true)
-
-                SectionHeader(label: "Experiments", compact: true)
-
+                SectionHeader(label: session.t("Language"), color: IrisPalette.flame, compact: true)
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("My uploads")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
-                        .foregroundStyle(IrisPalette.tealInk)
-
-                    if session.experiments.filter(\.isUploaded).isEmpty {
-                        EmptyStateCard(title: "No uploads saved", message: "Imported procedures will appear here.")
-                    } else {
-                        ForEach(session.experiments.filter(\.isUploaded)) { experiment in
-                            HStack(spacing: 10) {
-                                VStack(alignment: .leading, spacing: 6) {
-                                    HStack(spacing: 8) {
-                                        Text(experiment.name)
-                                            .font(.system(size: 12, weight: .medium, design: .rounded))
-                                            .foregroundStyle(IrisPalette.tealInk)
-                                            .lineLimit(1)
-
-                                        Text("Uploaded")
-                                            .font(.system(size: 8, weight: .medium, design: .rounded))
-                                            .foregroundStyle(IrisPalette.flame)
-                                            .padding(.horizontal, 6)
-                                            .padding(.vertical, 4)
-                                            .background(IrisPalette.warmBlush, in: Capsule())
-                                    }
-
-                                    HStack(spacing: 8) {
-                                        Text(experiment.subject.rawValue)
-                                            .font(.system(size: 9, weight: .medium, design: .rounded))
-                                            .foregroundStyle(IrisPalette.viridian)
-                                            .padding(.horizontal, 6)
-                                            .padding(.vertical, 4)
-                                            .background(IrisPalette.mintMist, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-
-                                        Text(experiment.createdAt.formatted(date: .abbreviated, time: .omitted))
-                                            .font(.system(size: 9, weight: .medium, design: .rounded))
-                                            .foregroundStyle(IrisPalette.flame)
-                                    }
-                                }
-
-                                Spacer()
-                            }
-                            .padding(14)
-                            .background(Color.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                    .stroke(IrisPalette.paleTeal.opacity(0.65), lineWidth: 1)
-                            }
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 10)], spacing: 10) {
+                        ForEach(AppLanguage.allCases) { language in
+                            languageButton(language)
                         }
                     }
+
+                    Text(session.t("UI shell, phone-mode Gemini responses, and spoken guidance follow this language."))
+                        .font(.irisCaption)
+                        .foregroundStyle(IrisPalette.tealInk.opacity(0.55))
                 }
                 .padding(.horizontal, 18)
                 .padding(.vertical, 12)
 
-                SectionHeader(label: "About", color: IrisPalette.flame, compact: true)
+                if let user = session.authenticatedUser {
+                    SectionHeader(label: session.t("Account"), compact: true)
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text(user.email ?? user.name)
+                            .font(.irisBody)
+                            .foregroundStyle(IrisPalette.tealInk)
 
-                VStack(spacing: 12) {
-                    Button(action: session.clearExperimentHistory) {
-                        Text("Clear experiment history")
-                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                        Button(action: session.signOut) {
+                            Text(session.t("Sign out"))
+                                .font(.irisBody)
+                                .foregroundStyle(.white)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 42)
+                                .background(IrisPalette.tealInk, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        }
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 12)
+                }
+
+                if session.appMode == .live {
+                    SectionHeader(label: session.t("Glasses Backend"), compact: true)
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(session.t("Used only when IRIS is running with the smart-glasses stream."))
+                            .font(.irisBodySmall)
+                            .foregroundStyle(IrisPalette.tealInk.opacity(0.62))
+
+                        TextField("192.168.x.x:8000", text: Binding(
+                            get: { backendURLDraft },
+                            set: { newValue in
+                                backendURLDraft = newValue
+                                session.networkManager.updateServerAddress(newValue)
+                            }
+                        ))
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .keyboardType(.numbersAndPunctuation)
+                        .textFieldStyle(.plain)
+                        .font(.irisBody)
+                        .foregroundStyle(IrisPalette.tealInk)
+                        .padding(.horizontal, 14)
+                        .frame(height: 42)
+                        .background(IrisPalette.cleanWhite, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(IrisPalette.paleTeal.opacity(0.7), lineWidth: 1)
+                        }
+
+                        Button {
+                            Task {
+                                let success = await session.networkManager.testConnection()
+                                await MainActor.run {
+                                    connectionTestSucceeded = success
+                                    connectionTestMessage = success
+                                        ? session.t("Connected to Sehreen's backend.")
+                                        : (session.networkManager.errorMessage ?? session.t("Could not reach the backend."))
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 8) {
+                                if session.networkManager.isLoading {
+                                    ProgressView()
+                                        .tint(.white)
+                                }
+                                Text(session.t(session.networkManager.isLoading ? "Testing..." : "Test connection"))
+                                    .font(.irisBody)
+                            }
                             .foregroundStyle(.white)
                             .frame(maxWidth: .infinity)
                             .frame(height: 40)
-                            .background(IrisPalette.flame, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    }
+                            .background(IrisPalette.tealInk, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        }
+                        .disabled(session.networkManager.isLoading)
 
-                    VStack(spacing: 4) {
-                        Text("v1.0.4")
-                            .font(.system(size: 12, weight: .medium, design: .rounded))
-                            .foregroundStyle(IrisPalette.flame)
-                        Text("IRIS · YHacks 2026")
-                            .font(.system(size: 10, weight: .medium, design: .rounded))
-                            .foregroundStyle(IrisPalette.tealInk.opacity(0.55))
+                        if let connectionTestMessage {
+                            Text(connectionTestMessage)
+                                .font(.irisCaption)
+                                .foregroundStyle(connectionTestSucceeded ? IrisPalette.viridian : IrisPalette.flame)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 12)
+                }
+
+                SectionHeader(label: session.t("Data"), color: IrisPalette.flame, compact: true)
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(session.t("Reset imported procedures and local session history."))
+                        .font(.irisBodySmall)
+                        .foregroundStyle(IrisPalette.tealInk.opacity(0.62))
+
+                    Button(action: session.clearExperimentHistory) {
+                        Text(session.t("Clear experiment history"))
+                            .font(.irisBody)
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 42)
+                            .background(IrisPalette.flame, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
                 }
                 .padding(.horizontal, 18)
-                .padding(.vertical, 14)
+                .padding(.vertical, 12)
                 .padding(.bottom, 120)
             }
         }
@@ -902,6 +882,44 @@ struct SettingsScreen: View {
         }
         .buttonStyle(.plain)
     }
+
+    private func appearanceButton(_ mode: AppearanceMode) -> some View {
+        Button {
+            session.updateAppearanceMode(mode)
+        } label: {
+            Text(mode.rawValue)
+                .font(.irisBody)
+                .foregroundStyle(session.appearanceMode == mode ? .white : IrisPalette.tealInk)
+                .frame(maxWidth: .infinity)
+                .frame(height: 38)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(session.appearanceMode == mode ? IrisPalette.viridian : IrisPalette.mintMist.opacity(0.9))
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func languageButton(_ language: AppLanguage) -> some View {
+        Button {
+            session.updateLanguage(language)
+        } label: {
+            Text(language.rawValue)
+                .font(.irisBody)
+                .foregroundStyle(session.selectedLanguage == language ? .white : IrisPalette.tealInk)
+                .frame(maxWidth: .infinity)
+                .frame(height: 40)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(session.selectedLanguage == language ? IrisPalette.flame : Color.white)
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(session.selectedLanguage == language ? IrisPalette.flame : IrisPalette.paleTeal.opacity(0.7), lineWidth: 1)
+                }
+        }
+        .buttonStyle(.plain)
+    }
 }
 
 struct BottomTabBar: View {
@@ -909,16 +927,16 @@ struct BottomTabBar: View {
 
     var body: some View {
         HStack {
-            tabButton(screen: .home, title: "Home", icon: "house.fill")
-            tabButton(screen: .experiment, title: "Lab", icon: "flask.fill")
-            tabButton(screen: .assistant, title: "Assistant", icon: "sparkles")
-            tabButton(screen: .report, title: "Report", icon: "doc.text.fill")
-            tabButton(screen: .settings, title: "Settings", icon: "slider.horizontal.3")
+            tabButton(screen: .home, title: session.t("Home"), icon: "house.fill")
+            tabButton(screen: .experiment, title: session.t("Lab"), icon: "flask.fill")
+            tabButton(screen: .assistant, title: session.t("Assistant"), icon: "waveform.circle.fill")
+            tabButton(screen: .report, title: session.t("Report"), icon: "doc.text.fill")
+            tabButton(screen: .settings, title: session.t("Settings"), icon: "slider.horizontal.3")
         }
         .padding(.horizontal, 14)
         .padding(.top, 14)
         .padding(.bottom, 16)
-        .background(.white.opacity(0.82), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .background(IrisTheme.surface.opacity(0.9), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 26, style: .continuous)
                 .stroke(IrisPalette.paleTeal.opacity(0.22), lineWidth: 1)
@@ -930,9 +948,24 @@ struct BottomTabBar: View {
         let activeColor = active ? ((session.isLive && screen == .assistant) ? IrisPalette.flame : IrisPalette.viridian) : IrisPalette.viridian.opacity(0.4)
 
         return Button {
+            let leavingLiveFlow = session.isLive &&
+                [Screen.experiment, .assistant, .report].contains(session.activeScreen) &&
+                [Screen.home, .settings].contains(screen)
+
+            if leavingLiveFlow {
+                session.pauseActiveSession()
+            }
+
             if session.currentExperiment == nil, screen == .experiment || screen == .assistant || screen == .report {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     session.activeScreen = .home
+                }
+                return
+            }
+
+            if session.isSessionPaused, screen == .assistant || screen == .report || screen == .experiment {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    session.activeScreen = .experiment
                 }
                 return
             }
@@ -967,12 +1000,11 @@ struct UploadSheet: View {
     @State private var name = ""
     @State private var selectedSubject: Subject = .chemistry
     @State private var selectedDifficulty: Difficulty = .beginner
-    @State private var procedureText = """
-1. Pour liquid from flask A into the beaker
-2. Add exactly 3 drops of indicator solution
-3. Slowly add liquid from flask B until colour change
-Materials: Flask A, Flask B, Beaker, Indicator solution, Dropper
-"""
+    @State private var procedureText = ""
+    @State private var sourceURL = ""
+    @State private var isShowingFileImporter = false
+    @State private var isLoadingSource = false
+    @State private var importFeedback: String?
 
     var body: some View {
         GeometryReader { proxy in
@@ -989,8 +1021,8 @@ Materials: Flask A, Flask B, Beaker, Indicator solution, Dropper
                         .padding(.bottom, 14)
 
                     HStack {
-                        Text("Add your experiment")
-                            .font(.system(size: 24, weight: .medium, design: .serif))
+                        Text(session.t("Add your experiment"))
+                            .font(.irisDisplayL)
                             .foregroundStyle(IrisPalette.tealInk)
                         Spacer()
                         Button(action: onClose) {
@@ -1001,126 +1033,262 @@ Materials: Flask A, Flask B, Beaker, Indicator solution, Dropper
                     }
                     .padding(.horizontal, 18)
 
-                    Text("Upload any procedure. IRIS turns it into a live guided experiment.")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                    Text(session.t("Upload any procedure. IRIS turns it into a live guided experiment."))
+                        .font(.irisBodySmall)
                         .foregroundStyle(IrisPalette.tealInk.opacity(0.55))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 18)
                         .padding(.top, 4)
-                        .padding(.bottom, 18)
+                        .padding(.bottom, 14)
 
                     ScrollView(showsIndicators: false) {
-                        VStack(spacing: 10) {
-                            UploadMethodCard(selected: method == "Paste text", icon: "doc.text", title: "Paste text", subtitle: "Copy-paste your procedure") {
+                        VStack(alignment: .leading, spacing: 16) {
+                            UploadMethodCard(selected: method == "Paste text", icon: "doc.text", title: session.t("Paste text"), subtitle: session.t("Copy-paste your procedure")) {
                                 method = "Paste text"
+                                importFeedback = nil
                             }
 
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Procedure text")
-                                    .font(.system(size: 11, weight: .bold, design: .rounded))
-                                    .tracking(1)
-                                    .foregroundStyle(IrisPalette.tealInk)
+                            UploadMethodCard(selected: method == "PDF", icon: "doc.richtext", title: session.t("Import PDF"), subtitle: session.t("Extract procedure from a PDF")) {
+                                method = "PDF"
+                                importFeedback = nil
+                                isShowingFileImporter = true
+                            }
 
-                                TextEditor(text: $procedureText)
-                                    .font(.system(size: 14, weight: .medium, design: .rounded))
-                                    .foregroundStyle(IrisPalette.tealInk)
-                                    .scrollContentBackground(.hidden)
-                                    .frame(minHeight: 150)
-                                    .padding(10)
-                                    .background(Color.white, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                                    .overlay {
-                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                            .stroke(IrisPalette.paleTeal, lineWidth: 1)
+                            UploadMethodCard(selected: method == "URL", icon: "link", title: session.t("Import URL"), subtitle: session.t("Fetch a procedure from the web")) {
+                                method = "URL"
+                                importFeedback = nil
+                            }
+
+                            VStack(alignment: .leading, spacing: 12) {
+                                if method == "URL" {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Text(session.t("Source URL"))
+                                            .font(.irisEyebrow)
+                                            .tracking(1.2)
+                                            .foregroundStyle(IrisPalette.viridian)
+
+                                        HStack(spacing: 10) {
+                                            TextField(session.t("https://example.com/lab-procedure"), text: $sourceURL)
+                                                .textFieldStyle(.plain)
+                                                .font(.irisSubheadline)
+                                                .foregroundStyle(IrisPalette.tealInk)
+                                                .padding(.horizontal, 14)
+                                                .frame(height: 44)
+                                                .background(Color.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+                                            Button {
+                                                Task {
+                                                    await fetchProcedureFromURL()
+                                                }
+                                            } label: {
+                                                Group {
+                                                    if isLoadingSource {
+                                                        ProgressView()
+                                                            .tint(.white)
+                                                    } else {
+                                                        Text(session.t("Fetch"))
+                                                            .font(.irisBody)
+                                                    }
+                                                }
+                                                .foregroundStyle(.white)
+                                                .frame(width: 84, height: 44)
+                                                .background(IrisPalette.tealInk, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                            }
+                                            .disabled(isLoadingSource || sourceURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                                        }
                                     }
+                                }
+
+                                if method == "PDF" {
+                                    Button {
+                                        isShowingFileImporter = true
+                                    } label: {
+                                        HStack(spacing: 12) {
+                                            Image(systemName: "doc.richtext")
+                                                .foregroundStyle(IrisPalette.flame)
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text(session.t("Choose PDF"))
+                                                    .font(.irisSubheadline)
+                                                    .foregroundStyle(IrisPalette.tealInk)
+                                                Text(procedureText.isEmpty ? session.t("Select a file to extract its procedure text.") : session.t("PDF text loaded and ready to edit."))
+                                                    .font(.irisCaption)
+                                                    .foregroundStyle(IrisPalette.tealInk.opacity(0.55))
+                                            }
+                                            Spacer()
+                                            Image(systemName: "arrow.up.doc")
+                                                .foregroundStyle(IrisPalette.viridian)
+                                        }
+                                        .padding(14)
+                                        .background(Color.white, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                                        .overlay {
+                                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                                .stroke(IrisPalette.paleTeal.opacity(0.9), lineWidth: 1)
+                                        }
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+
+                                Text(session.t("Procedure"))
+                                    .font(.irisEyebrow)
+                                    .tracking(1.2)
+                                    .foregroundStyle(IrisPalette.viridian)
+
+                                ZStack(alignment: .topLeading) {
+                                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                        .fill(Color.white)
+
+                                    if procedureText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                        Text(procedurePlaceholder)
+                                            .font(.irisBody)
+                                            .foregroundStyle(IrisPalette.tealInk.opacity(0.35))
+                                            .padding(.horizontal, 16)
+                                            .padding(.top, 16)
+                                    }
+
+                                    TextEditor(text: $procedureText)
+                                        .font(.irisSubheadline)
+                                        .foregroundStyle(IrisPalette.tealInk)
+                                        .scrollContentBackground(.hidden)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 10)
+                                        .frame(minHeight: 174)
+                                }
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                        .stroke(IrisPalette.paleTeal.opacity(0.9), lineWidth: 1)
+                                }
+
+                                if let importFeedback {
+                                    Text(importFeedback)
+                                        .font(.irisCaption)
+                                        .foregroundStyle(
+                                            importFeedback == session.t("Loaded PDF text.") ||
+                                            importFeedback == session.t("Loaded procedure from URL.")
+                                            ? IrisPalette.viridian
+                                            : IrisPalette.flame
+                                        )
+                                }
                             }
 
                             VStack(alignment: .leading, spacing: 14) {
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Text("Experiment name")
-                                        .font(.system(size: 11, weight: .bold, design: .rounded))
-                                        .tracking(1)
-                                        .foregroundStyle(IrisPalette.tealInk)
-                                    TextField("e.g. Acid-base titration", text: $name)
-                                        .textFieldStyle(.plain)
-                                        .font(.system(size: 14, weight: .medium, design: .rounded))
-                                        .padding(.horizontal, 14)
-                                        .frame(height: 42)
-                                        .background(Color.white, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                        .overlay {
-                                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                                .stroke(IrisPalette.paleTeal, lineWidth: 1)
+                                Text(session.t("Experiment details"))
+                                    .font(.irisEyebrow)
+                                    .tracking(1.2)
+                                    .foregroundStyle(IrisPalette.viridian)
+
+                                VStack(alignment: .leading, spacing: 12) {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Text(session.t("Name"))
+                                            .font(.irisCaption)
+                                            .foregroundStyle(IrisPalette.tealInk.opacity(0.6))
+                                        TextField(session.t("e.g. Acid-base titration"), text: $name)
+                                            .textFieldStyle(.plain)
+                                            .font(.irisSubheadline)
+                                            .padding(.horizontal, 14)
+                                            .frame(height: 44)
+                                            .background(Color.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                    }
+
+                                    HStack(spacing: 10) {
+                                        VStack(alignment: .leading, spacing: 6) {
+                                            Text(session.t("Subject"))
+                                                .font(.irisCaption)
+                                                .foregroundStyle(IrisPalette.tealInk.opacity(0.6))
+                                            Menu {
+                                                ForEach(Subject.allCases) { subject in
+                                                    Button(subject.rawValue) {
+                                                        selectedSubject = subject
+                                                    }
+                                                }
+                                            } label: {
+                                                pickerLabel(selectedSubject.rawValue)
+                                            }
                                         }
+
+                                        VStack(alignment: .leading, spacing: 6) {
+                                            Text(session.t("Difficulty"))
+                                                .font(.irisCaption)
+                                                .foregroundStyle(IrisPalette.tealInk.opacity(0.6))
+                                            Menu {
+                                                ForEach(Difficulty.allCases) { difficulty in
+                                                    Button(difficulty.rawValue) {
+                                                        selectedDifficulty = difficulty
+                                                    }
+                                                }
+                                            } label: {
+                                                pickerLabel(selectedDifficulty.rawValue)
+                                            }
+                                        }
+                                    }
                                 }
-
-                                HStack(spacing: 10) {
-                                    VStack(alignment: .leading, spacing: 6) {
-                                        Text("Subject")
-                                            .font(.system(size: 11, weight: .bold, design: .rounded))
-                                            .tracking(1)
-                                        Menu {
-                                            ForEach(Subject.allCases) { subject in
-                                                Button(subject.rawValue) {
-                                                    selectedSubject = subject
-                                                }
-                                            }
-                                        } label: {
-                                            pickerLabel(selectedSubject.rawValue)
-                                        }
-                                    }
-
-                                    VStack(alignment: .leading, spacing: 6) {
-                                        Text("Difficulty")
-                                            .font(.system(size: 11, weight: .bold, design: .rounded))
-                                            .tracking(1)
-                                        Menu {
-                                            ForEach(Difficulty.allCases) { difficulty in
-                                                Button(difficulty.rawValue) {
-                                                    selectedDifficulty = difficulty
-                                                }
-                                            }
-                                        } label: {
-                                            pickerLabel(selectedDifficulty.rawValue)
-                                        }
-                                    }
+                                .padding(14)
+                                .background(Color.white.opacity(0.72), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                        .stroke(IrisPalette.paleTeal.opacity(0.9), lineWidth: 1)
                                 }
                             }
-                            .padding(.top, 8)
                         }
                         .padding(.horizontal, 18)
-                        .padding(.bottom, 18)
+                        .padding(.bottom, 20)
                     }
 
                     Button {
-                        session.importExperiment(
-                            name: name,
-                            subject: selectedSubject,
-                            difficulty: selectedDifficulty,
-                            method: method,
-                            rawText: procedureText
-                        )
+                        Task {
+                            await prepareImport()
+                        }
                     } label: {
-                        Text("Parse and set up experiment")
-                            .font(.system(size: 16, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 52)
-                            .background(IrisPalette.flame, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        Text(session.t("Set up experiment"))
+                            .font(.irisHeadline)
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 52)
+                        .background(
+                            LinearGradient(
+                                colors: [IrisPalette.flame, IrisPalette.flame.opacity(0.88)],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            ),
+                            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        )
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                        }
+                        .shadow(color: IrisPalette.flame.opacity(0.2), radius: 14, y: 8)
                     }
-                    .padding(18)
-                    .background(Color.white)
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 18)
+                    .padding(.top, 16)
+                    .padding(.bottom, 20)
+                    .background(Color.white.opacity(0.96))
                 }
                 .frame(maxWidth: .infinity)
                 .frame(maxHeight: proxy.size.height * 0.78, alignment: .top)
-                .background(IrisPalette.mintMist, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+                .background(
+                    LinearGradient(
+                        colors: [IrisPalette.cleanWhite, IrisPalette.mintMist.opacity(0.92)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
+                    in: RoundedRectangle(cornerRadius: 28, style: .continuous)
+                )
                 .ignoresSafeArea(edges: .bottom)
             }
+        }
+        .fileImporter(
+            isPresented: $isShowingFileImporter,
+            allowedContentTypes: [.pdf],
+            allowsMultipleSelection: false
+        ) { result in
+            handlePickedPDF(result)
         }
     }
 
     private func pickerLabel(_ value: String) -> some View {
         HStack {
             Text(value)
-                .font(.system(size: 14, weight: .medium, design: .rounded))
+                .font(.irisSubheadline)
                 .foregroundStyle(IrisPalette.tealInk)
             Spacer()
             Image(systemName: "chevron.down")
@@ -1128,11 +1296,131 @@ Materials: Flask A, Flask B, Beaker, Indicator solution, Dropper
                 .foregroundStyle(IrisPalette.paleTeal)
         }
         .padding(.horizontal, 12)
-        .frame(height: 42)
-        .background(Color.white, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(IrisPalette.paleTeal, lineWidth: 1)
+        .frame(height: 44)
+        .background(IrisPalette.cleanWhite, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private var procedurePlaceholder: String {
+        switch method {
+        case "PDF":
+            return session.t("Choose a PDF to extract its procedure text, then adjust it here if needed.")
+        case "URL":
+            return session.t("Fetch a lab page URL and the extracted procedure will appear here.")
+        default:
+            return session.t("Paste your lab procedure here. Include steps and, if possible, a materials line.")
+        }
+    }
+
+    private func prepareImport() async {
+        importFeedback = nil
+
+        if method == "URL", procedureText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            await fetchProcedureFromURL()
+        }
+
+        guard !procedureText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            importFeedback = method == "PDF" ? session.t("Import a PDF first.") : session.t("Add procedure text before continuing.")
+            return
+        }
+
+        await MainActor.run {
+            session.importExperiment(
+                name: name,
+                subject: selectedSubject,
+                difficulty: selectedDifficulty,
+                method: method,
+                rawText: procedureText
+            )
+        }
+    }
+
+    private func handlePickedPDF(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            guard let url = urls.first else { return }
+            loadPDF(from: url)
+        case .failure:
+            importFeedback = session.t("Could not open that PDF.")
+        }
+    }
+
+    private func loadPDF(from url: URL) {
+        let started = url.startAccessingSecurityScopedResource()
+        defer {
+            if started {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        guard let data = try? Data(contentsOf: url) else {
+            importFeedback = session.t("Could not read that PDF.")
+            return
+        }
+
+        guard let extractedText = session.extractProcedureText(fromPDFData: data) else {
+            importFeedback = session.t("That PDF did not contain readable text.")
+            return
+        }
+
+        procedureText = extractedText
+        if name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            name = session.suggestedExperimentName(
+                from: extractedText,
+                fallback: url.deletingPathExtension().lastPathComponent
+            ) ?? url.deletingPathExtension().lastPathComponent
+        }
+        importFeedback = session.t("Loaded PDF text.")
+    }
+
+    private func fetchProcedureFromURL() async {
+        let rawValue = sourceURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let normalizedURL = session.normalizedImportURL(from: rawValue) else {
+            importFeedback = session.t("Enter a valid URL.")
+            return
+        }
+
+        isLoadingSource = true
+        defer { isLoadingSource = false }
+
+        do {
+            var request = URLRequest(url: normalizedURL)
+            request.timeoutInterval = 20
+            request.setValue("Mozilla/5.0", forHTTPHeaderField: "User-Agent")
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let mimeType = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Type")?.lowercased() ?? ""
+
+            let extractedText: String
+            if mimeType.contains("pdf") || normalizedURL.pathExtension.lowercased() == "pdf" {
+                guard let normalizedText = session.extractProcedureText(fromPDFData: data) else {
+                    importFeedback = session.t("Could not parse that PDF URL.")
+                    return
+                }
+                extractedText = normalizedText
+            } else {
+                guard let html = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .unicode) else {
+                    importFeedback = session.t("Could not read text from that URL.")
+                    return
+                }
+                extractedText = session.extractProcedureText(fromHTML: html)
+            }
+
+            let cleanedText = session.normalizedProcedureText(from: extractedText)
+            guard !cleanedText.isEmpty else {
+                importFeedback = session.t("That URL did not contain readable procedure text.")
+                return
+            }
+
+            procedureText = cleanedText
+            if name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                let fallbackName = normalizedURL.deletingPathExtension().lastPathComponent
+                    .replacingOccurrences(of: "-", with: " ")
+                    .capitalized
+                name = session.suggestedExperimentName(from: cleanedText, fallback: fallbackName) ?? fallbackName
+            }
+            importFeedback = session.t("Loaded procedure from URL.")
+        } catch {
+            importFeedback = session.t("Could not fetch that URL.")
         }
     }
 }
