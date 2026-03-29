@@ -156,6 +156,11 @@ enum GuidanceStatus {
     case error
 }
 
+enum CameraCaptureMode: String {
+    case phone = "Phone"
+    case glasses = "Glasses"
+}
+
 struct GuidanceItem: Identifiable, Hashable {
     let id = UUID()
     let type: GuidanceRowType
