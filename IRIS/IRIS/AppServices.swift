@@ -7,10 +7,15 @@ import AVFoundation
 import Combine
 import Foundation
 import Speech
+import UIKit
 
 @MainActor
 final class CameraManager: NSObject, ObservableObject {
     private let sessionQueue = DispatchQueue(label: "iris.camera.session")
+    private let videoOutput = AVCaptureVideoDataOutput()
+    private let videoOutputDelegate = CameraFrameOutputDelegate()
+    private let imageContext = CIContext()
+    private var lastFrameTimestamp = Date.distantPast
 
     @Published var authorizationStatus: AVAuthorizationStatus = AVCaptureDevice.authorizationStatus(for: .video)
     @Published var isSessionRunning = false
@@ -18,6 +23,14 @@ final class CameraManager: NSObject, ObservableObject {
     @Published var selectedPosition: AVCaptureDevice.Position = .back
 
     nonisolated let session = AVCaptureSession()
+    var onFrameCaptured: ((Data) -> Void)?
+
+    override init() {
+        super.init()
+        videoOutputDelegate.onSampleBuffer = { [weak self] sampleBuffer in
+            self?.handleSampleBuffer(sampleBuffer)
+        }
+    }
 
     func requestPermissionIfNeeded() async -> Bool {
         let status = AVCaptureDevice.authorizationStatus(for: .video)
@@ -100,6 +113,22 @@ final class CameraManager: NSObject, ObservableObject {
                     }
 
                     self.session.addInput(input)
+
+                    if self.session.canAddOutput(self.videoOutput) {
+                        if !self.session.outputs.contains(self.videoOutput) {
+                            self.videoOutput.videoSettings = [
+                                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
+                            ]
+                            self.videoOutput.alwaysDiscardsLateVideoFrames = true
+                            self.videoOutput.setSampleBufferDelegate(self.videoOutputDelegate, queue: self.sessionQueue)
+                            self.session.addOutput(self.videoOutput)
+                        }
+                    }
+
+                    if let connection = self.videoOutput.connection(with: .video),
+                       connection.isVideoOrientationSupported {
+                        connection.videoOrientation = .portrait
+                    }
                     self.session.commitConfiguration()
 
                     Task { @MainActor in
@@ -114,165 +143,28 @@ final class CameraManager: NSObject, ObservableObject {
             }
         }
     }
+
+    private func handleSampleBuffer(_ sampleBuffer: CMSampleBuffer) {
+        guard Date().timeIntervalSince(lastFrameTimestamp) >= 0.5 else { return }
+        lastFrameTimestamp = Date()
+
+        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
+        guard let cgImage = imageContext.createCGImage(ciImage, from: ciImage.extent) else { return }
+        let image = UIImage(cgImage: cgImage)
+        guard let jpegData = image.jpegData(compressionQuality: 0.6) else { return }
+
+        Task { @MainActor [weak self] in
+            self?.onFrameCaptured?(jpegData)
+        }
+    }
 }
 
-@MainActor
-final class BackendManager: ObservableObject {
-    private static let backendURLKey = "iris.backend.baseURL"
+final class CameraFrameOutputDelegate: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
+    var onSampleBuffer: ((CMSampleBuffer) -> Void)?
 
-    @Published var connectionStatus = "Disconnected"
-    @Published var latestGuidance = ""
-    @Published var latestReportSummary = ""
-    @Published var baseURLString: String = UserDefaults.standard.string(forKey: backendURLKey) ?? ""
-    @Published var lastErrorMessage: String?
-    @Published var sessionID: String?
-
-    func connect(mode: AppMode) {
-        connectionStatus = mode == .demo ? "Demo relay" : (baseURLString.isEmpty ? "URL missing" : "Configured")
-    }
-
-    func disconnect() {
-        connectionStatus = "Disconnected"
-        sessionID = nil
-    }
-
-    func updateBaseURL(_ value: String) {
-        baseURLString = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        UserDefaults.standard.set(baseURLString, forKey: Self.backendURLKey)
-    }
-
-    func startSession(for experiment: Experiment, mode: AppMode, cameraSource: String) {
-        connect(mode: mode)
-        latestGuidance = mode == .demo ? "Demo mode active for \(experiment.name)." : "Preparing live backend session for \(experiment.name)."
-        sessionID = nil
-
-        guard mode == .live else { return }
-
-        Task {
-            do {
-                let response = try await createSession(for: experiment, cameraSource: cameraSource)
-                await MainActor.run {
-                    self.sessionID = response.sessionID
-                    self.latestGuidance = response.guidance
-                    self.connectionStatus = response.status.capitalized
-                    self.lastErrorMessage = nil
-                }
-            } catch {
-                await MainActor.run {
-                    self.connectionStatus = "Error"
-                    self.lastErrorMessage = error.localizedDescription
-                }
-            }
-        }
-    }
-
-    func sendTranscript(_ text: String, experiment: Experiment, currentStepIndex: Int) async throws -> String {
-        let currentStep = experiment.steps[min(max(currentStepIndex - 1, 0), max(experiment.steps.count - 1, 0))]
-        let decoded: BackendQuestionResponse = try await post(
-            path: sessionID.map { "sessions/\($0)/qa" } ?? "qa",
-            body: BackendQuestionRequest(
-                experimentName: experiment.name,
-                subject: experiment.subject.rawValue,
-                currentStepIndex: currentStepIndex,
-                currentStep: currentStep,
-                question: text,
-                materials: experiment.materials,
-                sessionId: sessionID
-            )
-        )
-        let answer = decoded.answer ?? decoded.response ?? decoded.message ?? decoded.text ?? ""
-        guard !answer.isEmpty else {
-            throw NSError(domain: "IRIS", code: 422, userInfo: [NSLocalizedDescriptionKey: "Backend returned an empty answer."])
-        }
-
-        latestGuidance = answer
-        lastErrorMessage = nil
-        connectionStatus = decoded.status?.capitalized ?? "Connected"
-        if let remoteSessionID = decoded.sessionID, !remoteSessionID.isEmpty {
-            sessionID = remoteSessionID
-        }
-        return answer
-    }
-
-    func finalizeReport(using report: LabReport) {
-        latestReportSummary = report.findings.first ?? "Report ready."
-        guard let sessionID else { return }
-
-        Task {
-            do {
-                let response: BackendCompleteSessionResponse = try await post(
-                    path: "sessions/\(sessionID)/complete",
-                    body: BackendCompleteSessionRequest(
-                        procedure: report.procedure,
-                        observations: report.observations,
-                        errors: report.errors,
-                        findings: report.findings,
-                        suggestions: report.suggestions
-                    )
-                )
-                await MainActor.run {
-                    self.latestReportSummary = response.summary
-                    self.connectionStatus = response.status.capitalized
-                }
-            } catch {
-                await MainActor.run {
-                    self.lastErrorMessage = error.localizedDescription
-                    self.connectionStatus = "Error"
-                }
-            }
-        }
-    }
-
-    fileprivate func sendEvent(type: BackendEventType, message: String) {
-        guard let sessionID else { return }
-
-        Task {
-            do {
-                let _: BackendStatusResponse = try await post(
-                    path: "sessions/\(sessionID)/events",
-                    body: BackendSessionEventRequest(type: type, message: message)
-                )
-            } catch {
-                await MainActor.run {
-                    self.lastErrorMessage = error.localizedDescription
-                }
-            }
-        }
-    }
-
-    private func createSession(for experiment: Experiment, cameraSource: String) async throws -> BackendStartSessionResponse {
-        try await post(
-            path: "sessions/start",
-            body: BackendStartSessionRequest(
-                experimentName: experiment.name,
-                subject: experiment.subject.rawValue,
-                difficulty: experiment.difficulty.rawValue,
-                time: experiment.time,
-                description: experiment.description,
-                steps: experiment.steps,
-                materials: experiment.materials,
-                cameraSource: cameraSource
-            )
-        )
-    }
-
-    private func post<RequestBody: Encodable, ResponseBody: Decodable>(path: String, body: RequestBody) async throws -> ResponseBody {
-        guard !baseURLString.isEmpty, let baseURL = URL(string: baseURLString) else {
-            throw NSError(domain: "IRIS", code: 400, userInfo: [NSLocalizedDescriptionKey: "Backend URL is missing."])
-        }
-
-        let endpoint = baseURL.appendingPathComponent(path)
-        var request = URLRequest(url: endpoint)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(body)
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse, 200..<300 ~= httpResponse.statusCode else {
-            throw NSError(domain: "IRIS", code: 500, userInfo: [NSLocalizedDescriptionKey: "Backend request failed."])
-        }
-
-        return try JSONDecoder().decode(ResponseBody.self, from: data)
+    func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+        onSampleBuffer?(sampleBuffer)
     }
 }
 
@@ -288,6 +180,7 @@ final class SpeechCoordinator: ObservableObject {
     @Published var authorizationStatus: SFSpeechRecognizerAuthorizationStatus = .notDetermined
     @Published var microphoneGranted = false
     @Published var errorMessage: String?
+    @Published var isAvailable = true
 
     func requestPermissionsIfNeeded() async -> Bool {
         let speechStatus = await withCheckedContinuation { continuation in
@@ -321,6 +214,7 @@ final class SpeechCoordinator: ObservableObject {
             guard granted else { return }
 
             do {
+                stopAudioCapture()
                 recognitionTask?.cancel()
                 recognitionTask = nil
                 recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
@@ -332,15 +226,24 @@ final class SpeechCoordinator: ObservableObject {
                 try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
 
                 let inputNode = audioEngine.inputNode
-                let recordingFormat = inputNode.outputFormat(forBus: 0)
+                let recordingFormat = inputNode.inputFormat(forBus: 0)
+                guard recordingFormat.sampleRate > 0, recordingFormat.channelCount > 0 else {
+                    isAvailable = false
+                    throw NSError(
+                        domain: "IRIS",
+                        code: 406,
+                        userInfo: [NSLocalizedDescriptionKey: "Microphone input is not available on this device."]
+                    )
+                }
                 inputNode.removeTap(onBus: 0)
-                inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
+                inputNode.installTap(onBus: 0, bufferSize: 1024, format: nil) { [weak self] buffer, _ in
                     self?.recognitionRequest?.append(buffer)
                 }
 
                 audioEngine.prepare()
                 try audioEngine.start()
 
+                isAvailable = true
                 liveTranscript = ""
                 isListening = true
                 errorMessage = nil
@@ -359,6 +262,7 @@ final class SpeechCoordinator: ObservableObject {
                 }
             } catch {
                 errorMessage = error.localizedDescription
+                isAvailable = false
                 stopAudioCapture()
             }
         }
@@ -372,7 +276,9 @@ final class SpeechCoordinator: ObservableObject {
 
     private func stopAudioCapture() {
         isListening = false
-        audioEngine.stop()
+        if audioEngine.isRunning {
+            audioEngine.stop()
+        }
         audioEngine.inputNode.removeTap(onBus: 0)
         recognitionRequest?.endAudio()
         recognitionTask?.finish()
@@ -401,6 +307,7 @@ final class AppSession: ObservableObject {
     @Published var transcript = ""
     @Published var lastErrorMessage: String?
     @Published var cameraSource = "Phone camera · Rear"
+    @Published var selectedCameraMode: CameraCaptureMode = .phone
     @Published var isUsingExternalCamera = false
     @Published var connectionStatuses: [ConnectionStatus] = [
         .init(label: "Camera", value: "Ready", color: IrisPalette.viridian),
@@ -419,16 +326,21 @@ final class AppSession: ObservableObject {
     // ── NetworkManager — Sehreen's backend ────────────────────────────────────
     let networkManager = NetworkManager()
 
-    let backendManager = BackendManager()
     let speechCoordinator = SpeechCoordinator()
     let cameraManager = CameraManager()
 
     init() {
         experiments = Self.loadExperiments()
+        cameraManager.onFrameCaptured = { [weak self] frameData in
+            guard let self else { return }
+            Task { @MainActor in
+                await self.handleCapturedPhoneFrame(frameData)
+            }
+        }
     }
 
     // ── Live session start — follows Sehreen's /start-experiment + WS flow ──
-    func startLiveSession(for experiment: Experiment) {
+    func startLiveSession(for experiment: Experiment) async -> Bool {
         currentExperiment = experiment
         currentStepIndex = 1
         currentStatus = .watching
@@ -440,34 +352,45 @@ final class AppSession: ObservableObject {
         isLive = true
         reportStatus = .building
         guidanceFeed = []
+        networkManager.resetSessionState()
 
         if appMode == .live {
-            Task {
-                let backendSteps = await networkManager.startExperiment(
-                    type: experiment.backendType
-                )
-                await MainActor.run {
-                    if !backendSteps.isEmpty {
-                        var liveExperiment = experiment
-                        liveExperiment.steps = backendSteps
-                        currentExperiment = liveExperiment
-                        guidanceFeed.append(GuidanceItem(
-                            type: .confirmed,
-                            message: "Loaded \(backendSteps.count) steps from Sehreen's backend."
-                        ))
-                    }
-                    if let err = networkManager.errorMessage {
-                        flagIssue(err)
-                    } else {
-                        syncConnectionStatuses(audio: "Streaming")
-                        rebuildReport()
-                    }
+            let backendSteps = await networkManager.startExperiment(
+                type: experiment.backendType
+            )
+            if backendSteps.isEmpty {
+                if let err = networkManager.errorMessage {
+                    flagIssue(err)
                 }
+                isLive = false
+                syncConnectionStatuses(audio: "Error")
+                rebuildReport()
+                return false
             }
-            networkManager.connectStream()
-            syncConnectionStatuses(audio: "Streaming")
+
+            var liveExperiment = experiment
+            liveExperiment.steps = backendSteps
+            currentExperiment = liveExperiment
+            guidanceFeed.append(GuidanceItem(
+                type: .confirmed,
+                message: "Loaded \(backendSteps.count) steps from Sehreen's backend."
+            ))
+            if isUsingExternalCamera {
+                networkManager.connectStream()
+                guidanceFeed.append(GuidanceItem(
+                    type: .confirmed,
+                    message: "Connected to glasses stream. Waiting for live guidance from Sehreen's backend."
+                ))
+                syncConnectionStatuses(audio: "Streaming")
+            } else {
+                networkManager.connectPhoneStream()
+                guidanceFeed.append(GuidanceItem(
+                    type: .confirmed,
+                    message: "Using phone camera live stream. Frames are being sent directly to Sehreen's backend."
+                ))
+                syncConnectionStatuses(audio: "Ready")
+            }
         } else {
-            backendManager.startSession(for: experiment, mode: appMode, cameraSource: cameraSource)
             syncConnectionStatuses(audio: "Ready")
         }
 
@@ -478,6 +401,7 @@ final class AppSession: ObservableObject {
         }
 
         rebuildReport()
+        return true
     }
 
     func acknowledgeError() {
@@ -579,14 +503,19 @@ final class AppSession: ObservableObject {
                             summaryText
                         ]
                     }
-                    self.networkManager.disconnectStream()
+                    if self.isUsingExternalCamera {
+                        self.networkManager.disconnectStream()
+                    } else {
+                        self.networkManager.disconnectPhoneStream()
+                    }
+                    self.networkManager.resetSessionState()
                     self.cameraManager.stopSession()
                     self.syncConnectionStatuses(camera: "Paused", audio: "Saved")
                     self.rebuildReport()
                 }
             }
         } else {
-            backendManager.disconnect()
+            networkManager.resetSessionState()
             cameraManager.stopSession()
             syncConnectionStatuses(camera: "Paused", audio: "Saved")
             rebuildReport()
@@ -595,13 +524,11 @@ final class AppSession: ObservableObject {
 
     func completeReportBuild() {
         reportStatus = .complete
-        if appMode == .demo {
-            backendManager.finalizeReport(using: generatedReport)
-        }
         syncConnectionStatuses(audio: "Synced")
     }
 
     func prepareCamera(position: AVCaptureDevice.Position) {
+        selectedCameraMode = .phone
         isUsingExternalCamera = false
         cameraManager.startSession(position: position)
         updateCameraSource(position: position)
@@ -614,6 +541,7 @@ final class AppSession: ObservableObject {
     }
 
     func useExternalCameraSource() {
+        selectedCameraMode = .glasses
         isUsingExternalCamera = true
         cameraManager.stopSession()
         cameraSource = "Smart glasses · External stream"
@@ -622,7 +550,6 @@ final class AppSession: ObservableObject {
 
     func updateAppMode(_ mode: AppMode) {
         appMode = mode
-        backendManager.connect(mode: mode)
         syncConnectionStatuses(audio: speechCoordinator.isListening ? "Listening" : "Ready")
     }
 
@@ -727,10 +654,31 @@ final class AppSession: ObservableObject {
         )
     }
 
+    private func handleCapturedPhoneFrame(_ frameData: Data) async {
+        guard appMode == .live, !isUsingExternalCamera else { return }
+        guard let experiment = currentExperiment else { return }
+        let safeIndex = min(max(currentStepIndex - 1, 0), max(experiment.steps.count - 1, 0))
+        let currentStep = experiment.steps[safeIndex]
+        await networkManager.sendPhoneFrame(
+            frameData,
+            experimentType: experiment.backendType,
+            currentStep: currentStep
+        )
+    }
+
     private func syncConnectionStatuses(camera: String = "Connected", audio: String) {
+        let aiStatus: String
+        if appMode == .live {
+            aiStatus = isUsingExternalCamera
+                ? (networkManager.isStreamConnected ? "Streaming" : "Waiting")
+                : "REST live"
+        } else {
+            aiStatus = "Demo"
+        }
+
         connectionStatuses = [
             .init(label: "Camera", value: cameraStatusLabel(defaultValue: camera), color: IrisPalette.viridian),
-            .init(label: "AI", value: appMode == .live ? (networkManager.isStreamConnected ? "Streaming" : "Waiting") : backendManager.connectionStatus, color: IrisPalette.flame),
+            .init(label: "AI", value: aiStatus, color: IrisPalette.flame),
             .init(label: "Audio", value: audioStatusLabel(defaultValue: audio), color: IrisPalette.coolAqua)
         ]
     }
@@ -779,9 +727,6 @@ final class AppSession: ObservableObject {
         if let lastConfirmation = confirmations.last {
             return lastConfirmation
         }
-        if !backendManager.latestGuidance.isEmpty {
-            return backendManager.latestGuidance
-        }
         return "No observations captured yet."
     }
 
@@ -813,84 +758,4 @@ final class AppSession: ObservableObject {
         }
         return decoded
     }
-}
-
-private struct BackendQuestionRequest: Codable {
-    let experimentName: String
-    let subject: String
-    let currentStepIndex: Int
-    let currentStep: String
-    let question: String
-    let materials: [String]
-    let sessionId: String?
-}
-
-private struct BackendQuestionResponse: Codable {
-    let answer: String?
-    let response: String?
-    let message: String?
-    let text: String?
-    let status: String?
-    let sessionID: String?
-
-    enum CodingKeys: String, CodingKey {
-        case answer
-        case response
-        case message
-        case text
-        case status
-        case sessionID = "sessionId"
-    }
-}
-
-private struct BackendStartSessionRequest: Codable {
-    let experimentName: String
-    let subject: String
-    let difficulty: String
-    let time: String
-    let description: String
-    let steps: [String]
-    let materials: [String]
-    let cameraSource: String
-}
-
-private struct BackendStartSessionResponse: Codable {
-    let sessionID: String
-    let status: String
-    let guidance: String
-
-    enum CodingKeys: String, CodingKey {
-        case sessionID = "sessionId"
-        case status
-        case guidance
-    }
-}
-
-private enum BackendEventType: String, Codable {
-    case question
-    case confirmed
-    case warning
-    case report
-}
-
-private struct BackendSessionEventRequest: Codable {
-    let type: BackendEventType
-    let message: String
-}
-
-private struct BackendStatusResponse: Codable {
-    let status: String
-}
-
-private struct BackendCompleteSessionRequest: Codable {
-    let procedure: [String]
-    let observations: String
-    let errors: [String]
-    let findings: [String]
-    let suggestions: [String]
-}
-
-private struct BackendCompleteSessionResponse: Codable {
-    let status: String
-    let summary: String
 }
