@@ -7,6 +7,18 @@ import AVFoundation
 import SwiftUI
 import UIKit
 
+extension Font {
+    static let irisDisplayXL = Font.system(size: 30, weight: .medium, design: .serif)
+    static let irisDisplayL = Font.system(size: 26, weight: .medium, design: .serif)
+    static let irisDisplayM = Font.system(size: 22, weight: .medium, design: .serif)
+    static let irisHeadline = Font.system(size: 16, weight: .semibold, design: .rounded)
+    static let irisSubheadline = Font.system(size: 14, weight: .medium, design: .rounded)
+    static let irisBody = Font.system(size: 13, weight: .medium, design: .rounded)
+    static let irisBodySmall = Font.system(size: 12, weight: .medium, design: .rounded)
+    static let irisCaption = Font.system(size: 11, weight: .medium, design: .rounded)
+    static let irisEyebrow = Font.system(size: 10, weight: .bold, design: .rounded)
+}
+
 struct CameraPreviewView: UIViewRepresentable {
     let session: AVCaptureSession
 
@@ -55,10 +67,10 @@ struct UploadMethodCard: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .font(.irisBody)
                         .foregroundStyle(IrisPalette.tealInk)
                     Text(subtitle)
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .font(.irisCaption)
                         .foregroundStyle(IrisPalette.tealInk.opacity(0.5))
                 }
 
@@ -86,6 +98,11 @@ struct NavBar: View {
     var compact = false
     var rightElement: AnyView?
     var isHome = false
+    @AppStorage("iris.settings.language") private var languageRawValue = AppLanguage.english.rawValue
+
+    private var language: AppLanguage {
+        AppLanguage(rawValue: languageRawValue) ?? .english
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -107,13 +124,13 @@ struct NavBar: View {
                         VStack(alignment: .leading, spacing: 2) {
                             if let label {
                                 Text(label)
-                                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                                    .font(.irisEyebrow)
                                     .tracking(1.3)
                                     .foregroundStyle(IrisPalette.viridian.opacity(0.88))
                             }
 
                             Text(title)
-                                .font(.system(size: compact ? 22 : 26, weight: .medium, design: .serif))
+                                .font(compact ? .irisDisplayM : .irisDisplayL)
                                 .foregroundStyle(foreground)
                                 .lineLimit(2)
                         }
@@ -129,11 +146,11 @@ struct NavBar: View {
 
             if isHome {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("What are we experimenting today?")
-                        .font(.system(size: 30, weight: .medium, design: .serif))
+                    Text(language.localized("What are we experimenting today?"))
+                        .font(.irisDisplayXL)
                         .foregroundStyle(IrisPalette.tealInk)
-                    Text("Search or bring your own procedure")
-                        .font(.system(size: 14, weight: .medium, design: .rounded))
+                    Text(language.localized("Search or bring your own procedure"))
+                        .font(.irisSubheadline)
                         .foregroundStyle(IrisPalette.viridian)
                 }
                 .padding(.top, 6)
@@ -151,21 +168,10 @@ struct IrisLogo: View {
     let lightStyle: Bool
 
     var body: some View {
-        HStack(spacing: 12) {
-            Circle()
-                .stroke(lightStyle ? IrisPalette.viridian.opacity(0.8) : IrisPalette.viridian, lineWidth: 2.4)
-                .frame(width: markSize, height: markSize)
-                .overlay {
-                    Circle()
-                        .fill(IrisPalette.flame)
-                        .frame(width: markSize * 0.28, height: markSize * 0.28)
-                }
-
-            Text("IRIS")
-                .font(.system(size: titleSize, weight: .medium, design: .serif))
-                .tracking(2)
-                .foregroundStyle(lightStyle ? Color.white : IrisPalette.tealInk)
-        }
+        Image("logo")
+            .resizable()
+            .scaledToFit()
+            .frame(width: max(markSize + titleSize + 76, titleSize * 3.6))
     }
 }
 
@@ -178,7 +184,7 @@ struct SectionHeader: View {
     var body: some View {
         HStack {
             Text(label.uppercased())
-                .font(.system(size: compact ? 10 : 11, weight: .bold, design: .rounded))
+                .font(.irisEyebrow)
                 .tracking(1.2)
                 .foregroundStyle(color)
 
@@ -186,7 +192,7 @@ struct SectionHeader: View {
 
             if let count {
                 Text(count)
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .font(.irisCaption)
                     .foregroundStyle(IrisPalette.tealInk.opacity(0.45))
             }
         }
@@ -198,26 +204,27 @@ struct SectionHeader: View {
 struct ExperimentCard: View {
     let experiment: Experiment
     let isDark: Bool
+    let language: AppLanguage
     let onStart: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(experiment.name)
-                        .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    Text(experiment.localizedName(language))
+                        .font(.irisHeadline)
                         .foregroundStyle(isDark ? .white : IrisPalette.tealInk)
 
-                    Text(experiment.description)
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                    Text(experiment.localizedDescription(language))
+                        .font(.irisBodySmall)
                         .foregroundStyle(isDark ? IrisPalette.coolAqua : IrisPalette.tealInk.opacity(0.55))
                         .lineLimit(1)
                 }
 
                 Spacer()
 
-                Text(experiment.difficulty.rawValue.uppercased())
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                Text(experiment.difficulty.localizedName(language).uppercased())
+                    .font(.irisEyebrow)
                     .foregroundStyle(isDark ? IrisPalette.coolAqua : IrisPalette.viridian)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
@@ -226,15 +233,15 @@ struct ExperimentCard: View {
 
             HStack {
                 Label(experiment.time, systemImage: "clock")
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .font(.irisBodySmall)
                     .foregroundStyle(isDark ? IrisPalette.coolAqua : IrisPalette.tealInk.opacity(0.55))
 
                 Spacer()
 
                 Button(action: onStart) {
                     HStack(spacing: 4) {
-                        Text("Start")
-                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                        Text(language.localized("Start"))
+                            .font(.irisBody)
                         Image(systemName: "arrow.right")
                             .font(.system(size: 12, weight: .bold))
                     }
@@ -249,7 +256,7 @@ struct ExperimentCard: View {
             }
         }
         .padding(16)
-        .background(isDark ? IrisPalette.tealInk : Color.white, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .background(isDark ? IrisPalette.tealInk : IrisTheme.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .stroke(isDark ? IrisPalette.tealInk : IrisPalette.paleTeal.opacity(0.9), lineWidth: 1)
@@ -264,17 +271,17 @@ struct EmptyStateCard: View {
     var body: some View {
         VStack(spacing: 8) {
             Text(title)
-                .font(.system(size: 16, weight: .bold, design: .rounded))
-                .foregroundStyle(IrisPalette.tealInk)
+                .font(.irisHeadline)
+                .foregroundStyle(IrisTheme.primaryText)
             Text(message)
-                .font(.system(size: 13, weight: .medium, design: .rounded))
-                .foregroundStyle(IrisPalette.tealInk.opacity(0.55))
+                .font(.irisBody)
+                .foregroundStyle(IrisTheme.secondaryText)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 18)
         .padding(.vertical, 22)
-        .background(Color.white, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .background(IrisTheme.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .stroke(IrisPalette.paleTeal.opacity(0.7), lineWidth: 1)
@@ -286,6 +293,11 @@ struct GuidanceRow: View {
     let type: GuidanceRowType
     let message: String
     let time: String
+    @AppStorage("iris.settings.language") private var languageRawValue = AppLanguage.english.rawValue
+
+    private var language: AppLanguage {
+        AppLanguage(rawValue: languageRawValue) ?? .english
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -304,7 +316,7 @@ struct GuidanceRow: View {
                     .foregroundStyle(IrisPalette.tealInk)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                Text("\(time) ago")
+                Text("\(time) \(language.localized("ago"))")
                     .font(.system(size: 11, weight: .medium, design: .rounded))
                     .foregroundStyle(IrisPalette.viridian.opacity(0.65))
             }
@@ -338,7 +350,7 @@ struct ConnectionStatusRow: View {
                     .font(.system(size: 10, weight: .bold, design: .rounded))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 7)
-                    .background(Color.white.opacity(0.92), in: Capsule())
+                    .background(IrisTheme.surface.opacity(0.92), in: Capsule())
                 }
             }
         }
@@ -382,6 +394,11 @@ struct ReportSection<Content: View>: View {
     var titleColor: Color = IrisPalette.viridian
     var updated: String?
     @ViewBuilder let content: Content
+    @AppStorage("iris.settings.language") private var languageRawValue = AppLanguage.english.rawValue
+
+    private var language: AppLanguage {
+        AppLanguage(rawValue: languageRawValue) ?? .english
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -394,7 +411,7 @@ struct ReportSection<Content: View>: View {
                 Spacer()
 
                 if let updated {
-                    Text("Updated \(updated) ago")
+                    Text("\(language.localized("Updated")) \(updated) \(language.localized("ago"))")
                         .font(.system(size: 10, weight: .medium, design: .rounded))
                         .foregroundStyle(IrisPalette.flame)
                 }
@@ -423,7 +440,7 @@ struct SettingsRow: View {
         HStack {
             Text(label)
                 .font(.system(size: compact ? 12 : 13, weight: .medium, design: .rounded))
-                .foregroundStyle(IrisPalette.tealInk)
+                .foregroundStyle(IrisTheme.primaryText)
 
             Spacer()
 
@@ -441,7 +458,7 @@ struct SettingsRow: View {
                 HStack(spacing: 6) {
                     Text(value)
                         .font(.system(size: compact ? 12 : 13, weight: .medium, design: .rounded))
-                        .foregroundStyle(IrisPalette.tealInk.opacity(0.5))
+                        .foregroundStyle(IrisTheme.secondaryText)
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .bold))
                         .foregroundStyle(IrisPalette.paleTeal)
@@ -450,7 +467,7 @@ struct SettingsRow: View {
         }
         .padding(.horizontal, 18)
         .padding(.vertical, compact ? 12 : 14)
-        .background(Color.white)
+        .background(IrisTheme.surface)
         .overlay(alignment: .bottom) {
             Divider().overlay(IrisPalette.mintMist)
         }
