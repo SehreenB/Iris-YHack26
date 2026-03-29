@@ -12,7 +12,7 @@ struct ContentView: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            IrisPalette.cleanWhite
+            IrisTheme.background
                 .ignoresSafeArea()
 
             if session.showSplash {
@@ -22,11 +22,26 @@ struct ContentView: View {
                 ZStack {
                     switch session.activeScreen {
                     case .landing:
-                        LandingScreen {
-                            withAnimation(.easeInOut(duration: 0.25)) {
-                                session.activeScreen = .onboarding
-                            }
-                        }
+                        LandingScreen(
+                            onSignIn: {
+                                Task {
+                                    let didAuthenticate = await session.signInWithGoogle()
+                                    guard didAuthenticate else { return }
+                                    await MainActor.run {
+                                        withAnimation(.easeInOut(duration: 0.25)) {
+                                            session.activeScreen = .onboarding
+                                        }
+                                    }
+                                }
+                            },
+                            onContinueAsGuest: {
+                                withAnimation(.easeInOut(duration: 0.25)) {
+                                    session.activeScreen = .onboarding
+                                }
+                            },
+                            isSigningIn: session.isAuthenticating,
+                            errorMessage: session.authErrorMessage
+                        )
                         .transition(.opacity)
 
                     case .onboarding:
@@ -42,6 +57,8 @@ struct ContentView: View {
 
                     case .home:
                         HomeScreen(
+                            session: session,
+                            networkManager: session.networkManager,
                             experiments: session.experiments,
                             onStartExperiment: { experiment in
                                 session.currentExperiment = experiment
@@ -142,6 +159,8 @@ struct ContentView: View {
                 session.showSplash = false
             }
         }
+        .preferredColorScheme(session.preferredColorScheme)
+        .environment(\.locale, session.appLocale)
     }
 
     private var showsTabBar: Bool {
